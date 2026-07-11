@@ -1,0 +1,53 @@
+{
+  "generatedAt": "2026-07-11T18:22:01.516Z",
+  "releaseVersion": "local-local-local",
+  "currentStage": "DEV",
+  "overallStatus": "in_progress",
+  "branch": "local",
+  "commitSha": "local",
+  "commitShortSha": "local",
+  "workflow": "local",
+  "runNumber": "local",
+  "runId": "local",
+  "actor": "local",
+  "environments": [
+    {
+      "name": "DEV",
+      "status": "passed",
+      "gate": "automatic",
+      "description": "Initial validation stage for build, tests, audits, E2E, accessibility, Python compile checks, and image build.",
+      "testUrl": "http://localhost:5173",
+      "push": {
+        "version": "local-local-local",
+        "pushedAt": "2026-07-11T18:22:01.516Z",
+        "pushedBy": "local",
+        "branch": "local",
+        "commitSha": "local",
+        "commitShortSha": "local",
+        "workflowRun": "local"
+      }
+    },
+    {
+      "name": "QA",
+      "status": "pending",
+      "gate": "automatic after DEV passes",
+      "description": "Runs only after DEV succeeds and repeats the validation gates before production promotion.",
+      "testUrl": null,
+      "push": null
+    },
+    {
+      "name": "PROD",
+      "status": "pending",
+      "gate": "manual approval after QA passes",
+      "description": "Runs only after QA succeeds and the GitHub prod environment approval is granted.",
+      "testUrl": null,
+      "push": null
+    }
+  ],
+  "checks": [
+    "Backend build, unit tests, coverage, and production audit",
+    "Frontend production build, Playwright E2E, axe accessibility, and production audit",
+    "Python service dependency install and compile check",
+    "Docker Compose image build on CI runners with Docker available"
+  ]
+}

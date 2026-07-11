@@ -1,0 +1,38 @@
+.DS_Store
+
+# Local secrets and runtime configuration
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build and test output
+dist/
+**/dist/
+coverage/
+**/coverage/
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/
+
+# Python caches
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
+
+# Runtime data and logs
+logs/
+reports/
+backend/data/
+data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Local editor state
+.vscode/settings.json

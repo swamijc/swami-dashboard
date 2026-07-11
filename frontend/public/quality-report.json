@@ -1,0 +1,248 @@
+{
+  "generatedAt": "2026-07-11T18:21:34.095Z",
+  "overallStatus": "passed",
+  "score": 100,
+  "coverage": {
+    "lines": 39.41,
+    "statements": 38.2,
+    "functions": 28.07,
+    "branches": 31.69
+  },
+  "categories": [
+    {
+      "name": "Build",
+      "checks": [
+        {
+          "name": "Frontend production build",
+          "status": "passed",
+          "durationMs": 2138,
+          "exitCode": 0,
+          "output": "> swami-dashboard-frontend@1.0.0 build\n> tsc && vite build\n\nvite v8.1.4 building client environment for production...\n\u001b[2K\rtransforming...✓ 955 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                    0.48 kB │ gzip:   0.31 kB\ndist/assets/photon-CtaeFhXU.png    1.12 kB\ndist/assets/index-CanOqK0y.css    23.82 kB │ gzip:   5.28 kB\ndist/assets/index-B_PrOVNv.js    675.04 kB │ gzip: 196.68 kB\n\n✓ built in 485ms\n[plugin builtin:vite-reporter] \n(!) Some chunks are larger than 500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
+        },
+        {
+          "name": "Backend TypeScript build",
+          "status": "passed",
+          "durationMs": 970,
+          "exitCode": 0,
+          "output": "> swami-dashboard-backend@1.0.0 build\n> tsc"
+        }
+      ]
+    },
+    {
+      "name": "Unit & Coverage",
+      "checks": [
+        {
+          "name": "Backend unit tests with coverage",
+          "status": "passed",
+          "durationMs": 3763,
+          "exitCode": 0,
+          "output": "> swami-dashboard-backend@1.0.0 test:coverage\n> vitest run --coverage\n\n\n RUN  v4.1.10 /Users/swaminathan.kannaiyan/Documents/Swami Dashboard/backend\n      Coverage enabled with v8\n\n\n Test Files  3 passed (3)\n      Tests  15 passed (15)\n   Start at  23:51:19\n   Duration  3.19s (transform 80ms, setup 0ms, import 113ms, tests 2.84s, environment 0ms)\n\n % Coverage report from v8\n------------------|---------|----------|---------|---------|--------------------\nFile              | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s  \n------------------|---------|----------|---------|---------|--------------------\nAll files         |    38.2 |    31.69 |   28.07 |   39.41 |                    \n crypto           |   95.23 |    83.33 |     100 |     100 |                    \n  encrypt.ts      |   95.23 |    83.33 |     100 |     100 | 6,24               \n db               |   77.96 |    64.28 |   66.66 |   81.81 |                    \n  database.ts     |   96.96 |    68.18 |     100 |     100 | 11-288,311         \n  sessionStore.ts |   53.84 |       50 |   42.85 |   58.33 | 26-27,30,42-54     \n middleware       |     100 |       90 |     100 |     100 |                    \n  audit.ts        |     100 |    83.33 |     100 |     100 | 11                 \n routes           |   34.03 |    27.64 |   21.79 |   35.31 |                    \n  admin.ts        |   31.14 |    14.03 |    12.5 |   36.53 | ...122-129,134-135 \n  auth.ts         |   74.07 |       75 |      50 |   74.07 | 11-12,31-33,40-41  \n  jira.ts         |   28.88 |    19.81 |      15 |    32.5 | ...184-188,196-205 \n  release.ts      |   86.27 |     80.7 |     100 |   84.78 | ...130-131,134-135 \n  timesheet.ts    |   10.93 |     4.54 |       0 |    11.2 | ...296-300,304-310 \n  tracking.ts     |      28 |       30 |       0 |   29.16 | ...-35,41-49,55-56 \n scheduler        |     2.7 |    11.11 |       0 |    2.77 |                    \n  cron.ts         |     2.7 |    11.11 |       0 |    2.77 | 10-161             \n------------------|---------|----------|---------|---------|--------------------\n\n=============================== Coverage summary ===============================\nStatements   : 38.2% ( 209/547 )\nBranches     : 31.69% ( 135/426 )\nFunctions    : 28.07% ( 32/114 )\nLines        : 39.41% ( 201/510 )\n================================================================================"
+        }
+      ]
+    },
+    {
+      "name": "E2E UI & Accessibility",
+      "checks": [
+        {
+          "name": "Playwright E2E and accessibility tests",
+          "status": "passed",
+          "durationMs": 8890,
+          "exitCode": 0,
+          "output": "> swami-dashboard-frontend@1.0.0 test:e2e\n> playwright test\n\n\nRunning 4 tests using 1 worker\n\n  ✓  1 [chromium] › tests/e2e/dashboard.spec.ts:23:1 › anonymous users are redirected to login for protected pages (717ms)\n  ✓  2 [chromium] › tests/e2e/dashboard.spec.ts:32:1 › admin can login and view the code quality dashboard (1.2s)\n  ✓  3 [chromium] › tests/e2e/dashboard.spec.ts:51:1 › viewer can open Jira Onboarding and Quality in read-only mode (2.8s)\n  ✓  4 [chromium] › tests/e2e/dashboard.spec.ts:101:1 › login and quality pages have no critical accessibility violations (1.8s)\n\n  4 passed (8.1s)"
+        }
+      ]
+    },
+    {
+      "name": "Regression Smoke",
+      "checks": [
+        {
+          "name": "Frontend /timesheet route",
+          "status": "passed",
+          "httpStatus": 200,
+          "durationMs": 27
+        },
+        {
+          "name": "Frontend /release route",
+          "status": "passed",
+          "httpStatus": 200,
+          "durationMs": 3
+        },
+        {
+          "name": "Backend health route",
+          "status": "passed",
+          "httpStatus": 200,
+          "durationMs": 2
+        }
+      ]
+    },
+    {
+      "name": "API Contract",
+      "checks": [
+        {
+          "name": "Health API contract",
+          "status": "passed",
+          "httpStatus": 200
+        },
+        {
+          "name": "Login validation error contract",
+          "status": "passed",
+          "httpStatus": 400
+        },
+        {
+          "name": "Admin unauthorized contract",
+          "status": "passed",
+          "httpStatus": 401
+        }
+      ]
+    },
+    {
+      "name": "Load Test",
+      "checks": [
+        {
+          "name": "Local API health load test",
+          "status": "passed",
+          "totalRequests": 100,
+          "concurrency": 10,
+          "passed": 100,
+          "failed": 0,
+          "p95Ms": 6,
+          "durationMs": 26
+        }
+      ]
+    },
+    {
+      "name": "Pen Test Baseline",
+      "checks": [
+        {
+          "name": "Helmet security headers present",
+          "status": "passed"
+        },
+        {
+          "name": "Admin API rejects anonymous access",
+          "status": "passed",
+          "httpStatus": 401
+        },
+        {
+          "name": "Invalid login is rejected",
+          "status": "passed",
+          "httpStatus": 401
+        }
+      ]
+    },
+    {
+      "name": "Secrets Scan",
+      "checks": [
+        {
+          "name": "No hardcoded secrets in source files",
+          "status": "passed",
+          "findings": 0,
+          "scannedFiles": 75
+        }
+      ]
+    },
+    {
+      "name": "Static Security Scan",
+      "checks": [
+        {
+          "name": "No eval usage",
+          "status": "passed"
+        },
+        {
+          "name": "No Function constructor usage",
+          "status": "passed"
+        },
+        {
+          "name": "No React dangerouslySetInnerHTML usage",
+          "status": "passed"
+        },
+        {
+          "name": "No direct document.cookie access",
+          "status": "passed"
+        },
+        {
+          "name": "Session cookie is HttpOnly",
+          "status": "passed"
+        },
+        {
+          "name": "Session cookie has SameSite protection",
+          "status": "passed"
+        },
+        {
+          "name": "Request JSON body size is limited",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "License Compliance",
+      "checks": [
+        {
+          "name": "No blocked GPL-family licenses detected",
+          "status": "passed",
+          "packages": 489
+        }
+      ]
+    },
+    {
+      "name": "Dependency Audit",
+      "checks": [
+        {
+          "name": "Frontend production dependency audit",
+          "status": "passed",
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          }
+        },
+        {
+          "name": "Backend production dependency audit",
+          "status": "passed",
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          }
+        },
+        {
+          "name": "Frontend full dependency audit",
+          "status": "passed",
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          }
+        },
+        {
+          "name": "Backend full dependency audit",
+          "status": "passed",
+          "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          }
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Security is measured through baseline checks and dependency audit; no software can be guaranteed impossible to hack.",
+    "Load test is local and targets /api/health with 100 requests at concurrency 10.",
+    "E2E and accessibility checks use Playwright Chromium against the running local dashboard.",
+    "Secrets scanning intentionally excludes local .env, logs, build output, node_modules, and generated reports.",
+    "Coverage currently reflects backend unit, route, session, and access-control tests.",
+    "Production dependency audits are the deploy-time gate. Full audits include local development tooling such as Vite."
+  ]
+}

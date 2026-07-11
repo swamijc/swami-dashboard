@@ -1,0 +1,99 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_ENV: test
+  SESSION_SECRET: ci-session-secret-minimum-32-chars
+  ENCRYPTION_KEY: swami-dashboard-local-key-123456
+  ADMIN_PASSWORD: Admin@1234!
+  JIRA_API_TOKEN_ID: ''
+  PHOTONTRACK_VERIFY_SSL: 'false'
+
+jobs:
+  dev:
+    name: DEV - Build, Test, Audit, Image Check
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Run DEV validation
+        run: bash scripts/ci-stage.sh dev
+
+  qa:
+    name: QA - Promote After DEV Passes
+    runs-on: ubuntu-latest
+    needs: dev
+    environment: qa
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Run QA validation
+        run: bash scripts/ci-stage.sh qa
+
+  prod:
+    name: PROD - Manual Approval Required
+    runs-on: ubuntu-latest
+    needs: qa
+    environment: prod
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Run PROD validation
+        run: bash scripts/ci-stage.sh prod

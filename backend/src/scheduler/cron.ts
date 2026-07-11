@@ -1,0 +1,162 @@
+import cron from 'node-cron';
+import axios from 'axios';
+import { getDb } from '../db/database';
+import { decrypt } from '../crypto/encrypt';
+
+const PHOTON_URL = process.env.PHOTON_SERVICE_URL || 'http://localhost:8001';
+const BOOTS_URL  = process.env.BOOTS_KI_SERVICE_URL || 'http://localhost:8002';
+
+function logRun(serviceName: string, scheduleName: string): number {
+  const result = getDb().prepare(`
+    INSERT INTO job_runs (service_name, schedule_name, triggered_by, status)
+    VALUES (?, ?, 'cron', 'running')
+  `).run(serviceName, scheduleName);
+  return result.lastInsertRowid as number;
+}
+
+function finishRun(id: number, status: string, code?: number, summary?: string, error?: string, records?: number): void {
+  getDb().prepare(`
+    UPDATE job_runs SET status=?, http_status_code=?, response_summary=?,
+    error_message=?, records_processed=?, completed_at=datetime('now') WHERE id=?
+  `).run(status, code ?? null, summary ?? null, error ?? null, records ?? 0, id);
+}
+
+function getPhotonCookie(serviceName: string): string {
+  const cfg = getDb().prepare(`SELECT * FROM service_configs WHERE service_name=?`).get(serviceName) as any;
+  if (!cfg) return '';
+  const parts = [
+    cfg.session_cookie_enc     ? decrypt(cfg.session_cookie_enc)     : '',
+    cfg.shibboleth_cookie_enc  ? decrypt(cfg.shibboleth_cookie_enc)  : ''
+  ].filter(Boolean);
+  return parts.join('; ');
+}
+
+function getKICookie(): string {
+  const cfg = getDb().prepare(`SELECT * FROM service_configs WHERE service_name='boots_ki_swami'`).get() as any;
+  if (!cfg) return '';
+  return [
+    `CORE-CURRENTCULTURECODE=`,
+    `CSRFToken=${cfg.csrf_token_enc ? decrypt(cfg.csrf_token_enc) : ''}`,
+    `ASP.NET_SessionId=${cfg.asp_net_session_enc ? decrypt(cfg.asp_net_session_enc) : ''}`,
+    `api_access=${cfg.api_access_enc ? decrypt(cfg.api_access_enc) : ''}`,
+    `k1=${cfg.k1_enc ? decrypt(cfg.k1_enc) : ''}`
+  ].join('; ');
+}
+
+function getKIConfig(serviceName: string): Record<string, unknown> {
+  const cfg = getDb().prepare(`SELECT extra_config FROM service_configs WHERE service_name=?`).get(serviceName) as any;
+  return JSON.parse(cfg?.extra_config || '{}');
+}
+
+function getCurrentWeekStart(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(now.setDate(diff));
+  return monday.toISOString().split('T')[0];
+}
+
+async function runPhotonSwamiEntry(): Promise<void> {
+  const runId = logRun('photon_swami_entry', 'Daily 1:45 PM IST');
+  try {
+    const resp = await axios.post(`${PHOTON_URL}/swami/submit`, {
+      dry_run: false, session_cookie: getPhotonCookie('photon_swami_entry')
+    }, { timeout: 30000 });
+    finishRun(runId, 'success', resp.status, JSON.stringify(resp.data), undefined, 1);
+    console.log(`[CRON] photon_swami_entry: success`);
+  } catch (err: any) {
+    finishRun(runId, 'failed', err?.response?.status, undefined, err.message);
+    console.error(`[CRON] photon_swami_entry: failed — ${err.message}`);
+  }
+}
+
+async function runPhotonPrasannaEntry(): Promise<void> {
+  const runId = logRun('photon_prasanna_entry', 'Monday 1:45 PM IST');
+  try {
+    const resp = await axios.post(`${PHOTON_URL}/prasanna/submit`, {
+      dry_run: false, session_cookie: getPhotonCookie('photon_prasanna_entry')
+    }, { timeout: 30000 });
+    finishRun(runId, 'success', resp.status, JSON.stringify(resp.data), undefined, 1);
+    console.log(`[CRON] photon_prasanna_entry: success`);
+  } catch (err: any) {
+    finishRun(runId, 'failed', err?.response?.status, undefined, err.message);
+    console.error(`[CRON] photon_prasanna_entry: failed — ${err.message}`);
+  }
+}
+
+async function runPhotonApproval(scheduleName: string): Promise<void> {
+  const runId = logRun('photon_approval', scheduleName);
+  try {
+    const resp = await axios.post(`${PHOTON_URL}/approve`, {
+      dry_run: false, session_cookie: getPhotonCookie('photon_approval')
+    }, { timeout: 30000 });
+    finishRun(runId, 'success', resp.status, JSON.stringify(resp.data), undefined, resp.data?.approved_count ?? 0);
+    console.log(`[CRON] photon_approval (${scheduleName}): approved ${resp.data?.approved_count ?? 0}`);
+  } catch (err: any) {
+    finishRun(runId, 'failed', err?.response?.status, undefined, err.message);
+    console.error(`[CRON] photon_approval: failed — ${err.message}`);
+  }
+}
+
+async function runBootsKISubmit(resource: 'KSWA1' | 'VILP1', service: string): Promise<void> {
+  const runId = logRun(service, 'Monday 1:45 PM IST');
+  try {
+    const resp = await axios.post(`${BOOTS_URL}/submit`, {
+      resource_code: resource, dry_run: false,
+      ki_cookie: getKICookie(), config: getKIConfig(service),
+      week_start: getCurrentWeekStart(),
+      day_flags: { mon:'Y', tue:'Y', wed:'Y', thu:'Y', fri:'Y' }
+    }, { timeout: 30000 });
+    finishRun(runId, 'success', resp.status, JSON.stringify(resp.data), undefined, 1);
+    console.log(`[CRON] ${service}: success`);
+  } catch (err: any) {
+    finishRun(runId, 'failed', err?.response?.status, undefined, err.message);
+    console.error(`[CRON] ${service}: failed — ${err.message}`);
+  }
+}
+
+export function initScheduler(): void {
+  // ── Photon Swami Entry: Mon–Fri 1:45 PM IST (08:15 UTC) ────────
+  cron.schedule('15 8 * * 1-5', () => {
+    console.log('[CRON] Triggering photon_swami_entry...');
+    runPhotonSwamiEntry();
+  }, { timezone: 'UTC' });
+
+  // ── Photon Prasanna Entry: Monday 1:45 PM IST (08:15 UTC) ───────
+  cron.schedule('15 8 * * 1', () => {
+    console.log('[CRON] Triggering photon_prasanna_entry...');
+    runPhotonPrasannaEntry();
+  }, { timezone: 'UTC' });
+
+  // ── Photon Approval Run 1: Daily 1:45 PM IST (08:15 UTC) ────────
+  cron.schedule('15 8 * * *', () => {
+    console.log('[CRON] Triggering photon_approval (Run 1)...');
+    runPhotonApproval('Daily 1:45 PM IST');
+  }, { timezone: 'UTC' });
+
+  // ── Photon Approval Run 2: Daily 8:00 PM IST (14:30 UTC) ────────
+  cron.schedule('30 14 * * *', () => {
+    console.log('[CRON] Triggering photon_approval (Run 2)...');
+    runPhotonApproval('Daily 8:00 PM IST');
+  }, { timezone: 'UTC' });
+
+  // ── Boots KI Swami: Monday 1:45 PM IST (08:15 UTC) ──────────────
+  cron.schedule('15 8 * * 1', () => {
+    console.log('[CRON] Triggering boots_ki_swami...');
+    runBootsKISubmit('KSWA1', 'boots_ki_swami');
+  }, { timezone: 'UTC' });
+
+  // ── Boots KI PV: Monday 1:45 PM IST (08:15 UTC) ─────────────────
+  cron.schedule('15 8 * * 1', () => {
+    console.log('[CRON] Triggering boots_ki_pv...');
+    runBootsKISubmit('VILP1', 'boots_ki_pv');
+  }, { timezone: 'UTC' });
+
+  console.log('[CRON] All schedules registered (UTC timezone)');
+  console.log('[CRON]   Swami entry:    Mon-Fri 08:15 UTC (1:45 PM IST)');
+  console.log('[CRON]   Prasanna entry: Monday  08:15 UTC (1:45 PM IST)');
+  console.log('[CRON]   Approval Run1:  Daily   08:15 UTC (1:45 PM IST)');
+  console.log('[CRON]   Approval Run2:  Daily   14:30 UTC (8:00 PM IST)');
+  console.log('[CRON]   KI Swami:       Monday  08:15 UTC (1:45 PM IST)');
+  console.log('[CRON]   KI PV:          Monday  08:15 UTC (1:45 PM IST)');
+}

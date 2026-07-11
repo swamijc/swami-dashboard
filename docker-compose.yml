@@ -1,0 +1,97 @@
+services:
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports: ['3001:3001']
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_PATH: /app/data/dashboard.db
+      SESSION_SECRET: ${SESSION_SECRET:-change-this-before-production-min-32-chars}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-swami-dashboard-local-key-123456}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@1234!}
+      JIRA_BASE_URL: ${JIRA_BASE_URL:-https://bootsuk.atlassian.net}
+      JIRA_USER_EMAIL: ${JIRA_USER_EMAIL:-swami.k@ext.boots.com}
+      JIRA_API_TOKEN_ID: ${JIRA_API_TOKEN_ID:-}
+      JIRA_STORY_POINTS_FIELD: ${JIRA_STORY_POINTS_FIELD:-customfield_10036}
+      JIRA_TEAM_FIELD: ${JIRA_TEAM_FIELD:-customfield_10001}
+      JIRA_READY_FOR_PROGRESSIVE_SIT_FIELD: ${JIRA_READY_FOR_PROGRESSIVE_SIT_FIELD:-customfield_13392}
+      JIRA_SPRINT_FIELD: ${JIRA_SPRINT_FIELD:-customfield_10020}
+      JIRA_TIMEOUT_MS: ${JIRA_TIMEOUT_MS:-30000}
+      PHOTON_SERVICE_URL: http://photon:8011
+      BOOTS_KI_SERVICE_URL: http://boots-ki:8012
+      TRACKING_SERVICE_URL: http://time-tracking:8013
+      FRONTEND_URL: http://localhost
+    volumes:
+      - ./backend/data:/app/data
+    depends_on:
+      photon:
+        condition: service_healthy
+      boots-ki:
+        condition: service_healthy
+      time-tracking:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3001/api/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  photon:
+    build:
+      context: ./services/photon
+      dockerfile: Dockerfile
+    ports: ['8011:8011']
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8011/health", timeout=3).read()']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  boots-ki:
+    build:
+      context: ./services/boots-ki
+      dockerfile: Dockerfile
+    ports: ['8012:8012']
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8012/health", timeout=3).read()']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  time-tracking:
+    build:
+      context: ./services/time-tracking
+      dockerfile: Dockerfile
+    ports: ['8013:8013']
+    environment:
+      PHOTONTRACK_VERIFY_SSL: ${PHOTONTRACK_VERIFY_SSL:-false}
+      PHOTONTRACK_REQUEST_TIMEOUT_SECONDS: ${PHOTONTRACK_REQUEST_TIMEOUT_SECONDS:-15}
+      PHOTONTRACK_BATCH_TIMEOUT_SECONDS: ${PHOTONTRACK_BATCH_TIMEOUT_SECONDS:-20}
+      PHOTONTRACK_REPORT_TIMEOUT_SECONDS: ${PHOTONTRACK_REPORT_TIMEOUT_SECONDS:-120}
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://localhost:8013/health", timeout=3).read()']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports: ['80:80']
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost/']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

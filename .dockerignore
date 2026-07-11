@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/coverage
+**/__pycache__
+**/.pytest_cache
+**/test-results
+**/playwright-report
+reports
+logs
+conversation_logs
+.env
+.git
+backend/data
+frontend/public/quality-report.json
