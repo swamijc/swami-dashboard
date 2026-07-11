@@ -21,6 +21,18 @@ Default local login:
 
 Admins can add more dashboard users from Admin -> Users. Use role `viewer` for report-only and workflow-status access.
 
+## Application Screenshots
+
+Reference screenshots are committed under `docs/screenshots/` for quick review after cloning or browsing the repository.
+
+![Login screen](docs/screenshots/login.png)
+
+![Portfolio dashboard](docs/screenshots/dashboard-home.png)
+
+![Code quality dashboard](docs/screenshots/quality-dashboard.png)
+
+![Release tracking dashboard](docs/screenshots/release-tracking.png)
+
 ## Start The Application
 
 ```bash
