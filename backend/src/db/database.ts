@@ -292,13 +292,20 @@ function seedTeamMembers(db: DatabaseSync): void {
 }
 
 function seedSchedules(db: DatabaseSync): void {
+  // Restore schedules to 1:45 PM IST (08:15 UTC)
+  db.prepare(`UPDATE job_schedules SET schedule_name='Daily 1:45 PM IST', cron_expression='15 8 * * 1-5'
+    WHERE service_name='photon_swami_entry'`).run();
+  db.prepare(`UPDATE job_schedules SET schedule_name='Daily 1:45 PM IST', cron_expression='15 8 * * 1-5'
+    WHERE service_name='photon_prasanna_entry'`).run();
+
   const schedules = [
-    { service_name: 'photon_swami_entry',   schedule_name: 'Daily 1:45 PM IST', cron_expression: '15 8 * * 1-5', is_enabled: 1 },
-    { service_name: 'photon_prasanna_entry',schedule_name: 'Monday 1:45 PM IST', cron_expression: '15 8 * * 1',   is_enabled: 1 },
-    { service_name: 'photon_approval',      schedule_name: 'Daily 1:45 PM IST', cron_expression: '15 8 * * *',   is_enabled: 1 },
-    { service_name: 'photon_approval',      schedule_name: 'Daily 8:00 PM IST', cron_expression: '30 14 * * *',  is_enabled: 1 },
-    { service_name: 'boots_ki_swami',       schedule_name: 'Monday 1:45 PM IST', cron_expression: '15 8 * * 1',  is_enabled: 1 },
-    { service_name: 'boots_ki_pv',          schedule_name: 'Monday 1:45 PM IST', cron_expression: '15 8 * * 1',  is_enabled: 1 }
+    { service_name: 'photon_swami_entry',   schedule_name: 'Daily 1:45 PM IST',  cron_expression: '15 8 * * 1-5', is_enabled: 1 },
+    { service_name: 'photon_swami_pmo',     schedule_name: 'Daily 1:50 PM IST',  cron_expression: '20 8 * * 1-5', is_enabled: 1 },
+    { service_name: 'photon_prasanna_entry',schedule_name: 'Daily 1:45 PM IST', cron_expression: '15 8 * * 1-5',  is_enabled: 1 },
+    { service_name: 'photon_approval',      schedule_name: 'Daily 1:45 PM IST',  cron_expression: '15 8 * * *',   is_enabled: 1 },
+    { service_name: 'photon_approval',      schedule_name: 'Daily 8:00 PM IST',  cron_expression: '30 14 * * *',  is_enabled: 1 },
+    { service_name: 'boots_ki_swami',       schedule_name: 'Monday 1:45 PM IST', cron_expression: '15 8 * * 1',   is_enabled: 1 },
+    { service_name: 'boots_ki_pv',          schedule_name: 'Monday 1:45 PM IST', cron_expression: '15 8 * * 1',   is_enabled: 1 }
   ];
 
   const stmt = db.prepare(`

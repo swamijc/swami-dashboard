@@ -466,6 +466,8 @@ The Cookie header should include:
 
 Do not share session cookies outside the local machine. Treat them like passwords.
 
+If Photon Track returns `302 Found` with a redirect to `photon.okta.com` for `/photontrack/reportees`, the saved Cookie header is no longer authenticated for Photon Track. The Time Tracking service reports this as an expired or missing Photon Track session; refresh the browser login, copy the latest request Cookie header, and save it again in Admin.
+
 ## Timeout And Deadlock Protection
 
 Time Tracking fetches many Photon Track batches for all reportees. The fetch path is guarded to avoid hanging indefinitely:

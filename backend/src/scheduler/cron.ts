@@ -57,6 +57,16 @@ function getCurrentWeekStart(): string {
 }
 
 async function runPhotonSwamiEntry(): Promise<void> {
+  // Duplicate guard: skip if today already has a successful real submission.
+  const alreadyDone = getDb().prepare(`
+    SELECT id FROM job_runs
+    WHERE service_name='photon_swami_entry' AND status='success'
+      AND is_dry_run=0 AND date(started_at)=date('now') LIMIT 1
+  `).get();
+  if (alreadyDone) {
+    console.log('[CRON] photon_swami_entry: already submitted today — skipping duplicate');
+    return;
+  }
   const runId = logRun('photon_swami_entry', 'Daily 1:45 PM IST');
   try {
     const resp = await axios.post(`${PHOTON_URL}/swami/submit`, {
@@ -70,8 +80,49 @@ async function runPhotonSwamiEntry(): Promise<void> {
   }
 }
 
+async function runPhotonSwamiPmoSubmit(): Promise<void> {
+  // Guard: only proceed when today's photon_swami_entry has a non-dry success.
+  const todayOk = getDb().prepare(`
+    SELECT id FROM job_runs
+    WHERE service_name='photon_swami_entry'
+      AND status='success'
+      AND is_dry_run=0
+      AND date(started_at)=date('now')
+    LIMIT 1
+  `).get();
+
+  if (!todayOk) {
+    console.log('[CRON] photon_swami_pmo: skipping — today\u2019s timesheet not yet submitted successfully');
+    return;
+  }
+
+  const runId = logRun('photon_swami_pmo', 'Daily 1:50 PM IST');
+  try {
+    const resp = await axios.post(`${PHOTON_URL}/swami/pmo-submit`, {
+      dry_run: false, session_cookie: getPhotonCookie('photon_swami_entry')
+    }, { timeout: 30000 });
+    const submitted = resp.data?.submitted_count ?? 0;
+    const runStatus = resp.data?.status === 'no_pending' ? 'skipped' : 'success';
+    finishRun(runId, runStatus, resp.status, JSON.stringify(resp.data), undefined, submitted);
+    console.log(`[CRON] photon_swami_pmo: ${runStatus} submitted=${submitted}`);
+  } catch (err: any) {
+    finishRun(runId, 'failed', err?.response?.status, undefined, err.message);
+    console.error(`[CRON] photon_swami_pmo: failed — ${err.message}`);
+  }
+}
+
 async function runPhotonPrasannaEntry(): Promise<void> {
-  const runId = logRun('photon_prasanna_entry', 'Monday 1:45 PM IST');
+  // Duplicate guard: skip if today already has a successful real submission.
+  const alreadyDone = getDb().prepare(`
+    SELECT id FROM job_runs
+    WHERE service_name='photon_prasanna_entry' AND status='success'
+      AND is_dry_run=0 AND date(started_at)=date('now') LIMIT 1
+  `).get();
+  if (alreadyDone) {
+    console.log('[CRON] photon_prasanna_entry: already submitted today — skipping duplicate');
+    return;
+  }
+  const runId = logRun('photon_prasanna_entry', 'Daily 1:45 PM IST');
   try {
     const resp = await axios.post(`${PHOTON_URL}/prasanna/submit`, {
       dry_run: false, session_cookie: getPhotonCookie('photon_prasanna_entry')
@@ -122,8 +173,16 @@ export function initScheduler(): void {
     runPhotonSwamiEntry();
   }, { timezone: 'UTC' });
 
-  // ── Photon Prasanna Entry: Monday 1:45 PM IST (08:15 UTC) ───────
-  cron.schedule('15 8 * * 1', () => {
+  // ── Photon Swami PMO Submit: Mon–Fri 1:50 PM IST (08:20 UTC) ───
+  // Runs 5 min after the timesheet cron; only proceeds if today’s
+  // photon_swami_entry has a successful (non-dry) run recorded.
+  cron.schedule('20 8 * * 1-5', () => {
+    console.log('[CRON] Triggering photon_swami_pmo...');
+    runPhotonSwamiPmoSubmit();
+  }, { timezone: 'UTC' });
+
+  // ── Photon Prasanna Entry: Mon–Fri 1:45 PM IST (08:15 UTC) ───────
+  cron.schedule('15 8 * * 1-5', () => {
     console.log('[CRON] Triggering photon_prasanna_entry...');
     runPhotonPrasannaEntry();
   }, { timezone: 'UTC' });
@@ -154,7 +213,8 @@ export function initScheduler(): void {
 
   console.log('[CRON] All schedules registered (UTC timezone)');
   console.log('[CRON]   Swami entry:    Mon-Fri 08:15 UTC (1:45 PM IST)');
-  console.log('[CRON]   Prasanna entry: Monday  08:15 UTC (1:45 PM IST)');
+  console.log('[CRON]   Swami PMO:      Mon-Fri 08:20 UTC (1:50 PM IST) — conditional on today submit success');
+  console.log('[CRON]   Prasanna entry: Mon-Fri 08:15 UTC (1:45 PM IST)');
   console.log('[CRON]   Approval Run1:  Daily   08:15 UTC (1:45 PM IST)');
   console.log('[CRON]   Approval Run2:  Daily   14:30 UTC (8:00 PM IST)');
   console.log('[CRON]   KI Swami:       Monday  08:15 UTC (1:45 PM IST)');

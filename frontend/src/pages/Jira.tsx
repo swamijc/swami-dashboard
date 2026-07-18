@@ -67,13 +67,13 @@ export default function Jira() {
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState('');
   const [error, setError] = useState('');
-  const [jql, setJql] = useState('project = "Mobile App " AND "Team[Team]" in (5af5b4ff-5e77-47ba-869d-ceb6207cb297,6e469218-134d-486f-9d5b-0b0f34d16734) AND Sprint in openSprints() AND worktype in (Story, Bug)');
+  const [jql, setJql] = useState('project = "Mobile App " AND Sprint in openSprints() and issuetype in (Story, Bug, Defect)');
   const [filter, setFilter] = useState('');
   const [teamFilter, setTeamFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'All' | 'Story' | 'Bug'>('All');
+  const [typeFilter, setTypeFilter] = useState<'All' | 'Story' | 'Bug' | 'Defect'>('All');
   const [selectedResource, setSelectedResource] = useState('');
   const [chartMode, setChartMode] = useState<'Story/Bug' | 'AOS/iOS' | 'Status'>('Story/Bug');
   const issuesRef = useRef<HTMLDivElement | null>(null);
@@ -108,7 +108,7 @@ export default function Jira() {
       .filter(issue => statusFilter === 'All' || issue.status === statusFilter)
       .filter(issue => !fromDate || issue.updated?.slice(0, 10) >= fromDate)
       .filter(issue => !toDate || issue.updated?.slice(0, 10) <= toDate)
-      .filter(issue => !text || [issue.key, issue.summary, issue.assignee, issue.team, issue.status].some(value => value.toLowerCase().includes(text)))
+      .filter(issue => !text || [issue.key, issue.summary, issue.assignee, issue.team, issue.status].some(value => value.toLowerCase().includes(text)) || (issue.labels || []).some(label => label.toLowerCase().includes(text)))
         .sort((left, right) => left.assignee.localeCompare(right.assignee) || right.story_points - left.story_points || left.key.localeCompare(right.key));
   }, [report, filter, teamFilter, statusFilter, fromDate, toDate, typeFilter]);
 
@@ -133,6 +133,7 @@ export default function Jira() {
       if (issue.is_aos) current.aos_count += 1;
       if (issue.is_ios) current.ios_count += 1;
       if (issue.type === 'Bug') current.bug_count += 1;
+      if (issue.type === 'Defect') current.bug_count += 1;
       if (issue.type === 'Story') current.story_count += 1;
       teamMap.set(issue.team_id, current);
     }
@@ -159,6 +160,7 @@ export default function Jira() {
       if (issue.is_aos) current.aos_count += 1;
       if (issue.is_ios) current.ios_count += 1;
       if (issue.type === 'Bug') current.bug_count += 1;
+      if (issue.type === 'Defect') current.bug_count += 1;
       if (issue.type === 'Story') current.story_count += 1;
       resourceMap.set(issue.assignee, current);
     }
@@ -180,6 +182,7 @@ export default function Jira() {
     return [
       { name: 'Stories', value: visibleIssues.filter(issue => issue.type === 'Story').length },
       { name: 'Bugs', value: visibleIssues.filter(issue => issue.type === 'Bug').length },
+      { name: 'Defects', value: visibleIssues.filter(issue => issue.type === 'Defect').length },
     ].filter(item => item.value > 0);
   }, [chartMode, visibleIssues]);
 
@@ -209,6 +212,14 @@ export default function Jira() {
             JIRA Due Date
           </Link>
           <a
+            href="https://bootsuk.atlassian.net/wiki/spaces/cdc/pages/1443430401/Story+Point+Tracker+for+All+Team"
+            target="_blank"
+            rel="noreferrer"
+            className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition"
+          >
+            Team JIRA ↗
+          </a>
+          <a
             href="https://bootsuk.atlassian.net/jira"
             target="_blank"
             rel="noreferrer"
@@ -216,16 +227,6 @@ export default function Jira() {
           >
             Open Boots JIRA
           </a>
-          {!isViewer && (
-            <button
-              type="button"
-              onClick={loadReport}
-              disabled={loading}
-              className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
-            >
-              {loading ? 'Loading...' : 'Execute'}
-            </button>
-          )}
         </div>
       </div>
 
@@ -239,15 +240,27 @@ export default function Jira() {
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-2">
           <div className="text-xs font-medium text-gray-500">JQL</div>
-          {!isViewer && (
-            <button
-              type="button"
-              onClick={() => setJql(report?.default_jql || 'project = "Mobile App " AND "Team[Team]" in (5af5b4ff-5e77-47ba-869d-ceb6207cb297,6e469218-134d-486f-9d5b-0b0f34d16734) AND Sprint in openSprints() AND worktype in (Story, Bug)')}
-              className="text-xs text-blue-700 hover:underline w-fit"
-            >
-              Reset default JQL
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {!isViewer && (
+              <button
+                type="button"
+                onClick={() => setJql(report?.default_jql || 'project = "Mobile App " AND Sprint in openSprints() and issuetype in (Story, Bug, Defect)')}
+                className="text-xs text-blue-700 hover:underline"
+              >
+                Reset default JQL
+              </button>
+            )}
+            {!isViewer && (
+              <button
+                type="button"
+                onClick={loadReport}
+                disabled={loading}
+                className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+              >
+                {loading ? 'Loading...' : 'Execute'}
+              </button>
+            )}
+          </div>
         </div>
         <textarea
           value={jql}
@@ -280,7 +293,7 @@ export default function Jira() {
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
         <h2 className="font-semibold text-gray-800 mb-4">Filters</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
           <label className="text-xs font-medium text-gray-500">
             Team
             <select value={teamFilter} onChange={event => setTeamFilter(event.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
@@ -289,10 +302,12 @@ export default function Jira() {
             </select>
           </label>
           <label className="text-xs font-medium text-gray-500">
-            Status
-            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
+            Issue Type
+            <select value={typeFilter} onChange={event => setTypeFilter(event.target.value as any)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
               <option>All</option>
-              {statuses.map(status => <option key={status}>{status}</option>)}
+              <option>Story</option>
+              <option>Defect</option>
+              <option>Bug</option>
             </select>
           </label>
           <label className="text-xs font-medium text-gray-500">
@@ -305,7 +320,7 @@ export default function Jira() {
           </label>
           <label className="text-xs font-medium text-gray-500">
             Name / text
-            <input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Resource, key, summary" className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700" />
+            <input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Resource, key, summary, label" className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700" />
           </label>
         </div>
       </div>
@@ -322,18 +337,14 @@ export default function Jira() {
             <option>Status</option>
           </select>
         </div>
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
+        <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-5">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="text-left px-3 py-2">Team</th>
                 <th className="text-center px-3 py-2">Stories</th>
-                <th className="text-center px-3 py-2">Bugs</th>
-                <th className="text-center px-3 py-2">AOS</th>
-                <th className="text-center px-3 py-2">iOS</th>
-                <th className="text-center px-3 py-2">Issues</th>
-                <th className="text-center px-3 py-2">Resources</th>
+                <th className="text-center px-3 py-2">Defects</th>
                 <th className="text-center px-3 py-2">Story Points</th>
               </tr>
             </thead>
@@ -343,24 +354,23 @@ export default function Jira() {
                   <td className="px-3 py-2 font-medium text-gray-800">{team.team}</td>
                   <td className="px-3 py-2 text-center text-gray-600">{team.story_count}</td>
                   <td className="px-3 py-2 text-center text-gray-600">{team.bug_count}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">{team.aos_count}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">{team.ios_count}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">{team.issues}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">{team.resources}</td>
                   <td className="px-3 py-2 text-center font-semibold text-blue-700">{team.story_points}</td>
                 </tr>
               ))}
               {!loading && report && visibleTeams.length === 0 && (
-                <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">No teams match the current filters.</td></tr>
+                <tr><td colSpan={4} className="px-3 py-8 text-center text-gray-400">No teams match the current filters.</td></tr>
               )}
             </tbody>
           </table>
           </div>
-          <div className="min-h-[260px] rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <div className={`rounded-lg border border-gray-100 bg-gray-50 p-3 ${chartMode === 'Status' ? 'min-h-[400px]' : 'min-h-[340px]'}`}>
             {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={240}>
+              <ResponsiveContainer width="100%" height={chartMode === 'Status' ? 380 : 320}>
                 <PieChart>
-                  <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={86} paddingAngle={2}>
+                  <Pie data={chartData} dataKey="value" nameKey="name"
+                    innerRadius={chartMode === 'Status' ? 80 : 70}
+                    outerRadius={chartMode === 'Status' ? 140 : 130}
+                    paddingAngle={2}>
                     {chartData.map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}
                   </Pie>
                   <Tooltip />
@@ -371,50 +381,6 @@ export default function Jira() {
               <div className="flex h-full min-h-[220px] items-center justify-center text-sm text-gray-400">No chart data for the current filters.</div>
             )}
           </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-        <h2 className="font-semibold text-gray-800 mb-4">Resource-wise Story/Bug Split</h2>
-        <div className="overflow-auto max-h-[246px]">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 sticky top-0">
-              <tr>
-                <th className="text-left px-3 py-2">Resource</th>
-                <th className="text-center px-3 py-2">Stories</th>
-                <th className="text-center px-3 py-2">Bugs</th>
-                <th className="text-center px-3 py-2">AOS</th>
-                <th className="text-center px-3 py-2">iOS</th>
-                <th className="text-center px-3 py-2">Issues</th>
-                <th className="text-center px-3 py-2">Story Points</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleResources.map(resource => (
-                <tr key={resource.assignee} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-gray-800">
-                    <button
-                      type="button"
-                      onClick={() => selectResource(resource)}
-                      className="text-left text-blue-700 hover:underline"
-                      title="Show this developer's issues"
-                    >
-                      {resource.assignee}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2 text-center text-gray-600">{resource.story_count}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">{resource.bug_count}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">{resource.aos_count}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">{resource.ios_count}</td>
-                  <td className="px-3 py-2 text-center text-gray-600">{resource.issues}</td>
-                  <td className="px-3 py-2 text-center font-semibold text-blue-700">{resource.story_points}</td>
-                </tr>
-              ))}
-              {!loading && report && visibleResources.length === 0 && (
-                <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">No open sprint issues matched the JQL.</td></tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
 
@@ -431,6 +397,7 @@ export default function Jira() {
             <select value={typeFilter} onChange={event => setTypeFilter(event.target.value as any)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700">
               <option>All</option>
               <option>Story</option>
+              <option>Defect</option>
               <option>Bug</option>
             </select>
           </div>

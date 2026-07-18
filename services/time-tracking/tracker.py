@@ -37,6 +37,29 @@ COMMON_HEADERS = {
 }
 
 
+class PhotonTrackSessionExpired(Exception):
+    pass
+
+
+def raise_for_photon_auth(resp: httpx.Response) -> None:
+    """Raise PhotonTrackSessionExpired for any authentication failure."""
+    location = resp.headers.get("location", "").lower()
+    # Redirect to Okta or Photon SSO = session expired
+    if resp.status_code in {301, 302, 303, 307, 308} and (
+        "okta.com" in location or "sso.photon.com" in location or "/login" in location
+    ):
+        raise PhotonTrackSessionExpired(
+            "Photon Track session expired — open photontrack.photon.com in Chrome "
+            "to refresh automatically via the extension."
+        )
+    # HTML response where JSON expected = redirected after following redirects
+    content_type = resp.headers.get("content-type", "")
+    if resp.status_code == 200 and "text/html" in content_type:
+        raise PhotonTrackSessionExpired(
+            "Photon Track session expired (HTML redirect response received)."
+        )
+
+
 def format_photon_date(value: str) -> str:
     parsed = date.fromisoformat(value)
     return f"{parsed.year}-{parsed.month}-{parsed.day}"
@@ -68,7 +91,8 @@ def flatten_response_items(value: Any) -> list[dict]:
     if any(key in value for key in record_markers):
         return [value]
 
-    for key in ("data", "records", "timesheets", "accessData", "reporteeData", "entries"):
+    for key in ("data", "records", "timesheets", "accessData", "reporteeData",
+                "entries", "employeeAccess", "reporteeAccessData"):
         if key in value:
             return flatten_response_items(value[key])
 
@@ -123,6 +147,7 @@ async def fetch_reportees(session_cookie: str) -> list[dict]:
     url = f"{BASE_URL}/photontrack/reportees"
     async with httpx.AsyncClient(verify=VERIFY_SSL, timeout=PHOTON_REQUEST_TIMEOUT_SECONDS) as client:
         resp = await client.get(url, headers=build_headers(session_cookie))
+        raise_for_photon_auth(resp)
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list):
@@ -149,6 +174,7 @@ async def fetch_access_batch(
                "Origin": BASE_URL}
     async with httpx.AsyncClient(verify=VERIFY_SSL, timeout=PHOTON_REQUEST_TIMEOUT_SECONDS) as client:
         resp = await client.post(url, json=payload, headers=headers)
+        raise_for_photon_auth(resp)
         resp.raise_for_status()
         return resp.json()
 
@@ -162,12 +188,36 @@ async def fetch_all_access(
     Fetch access data for all reportees in Photon Track batches.
     Returns (all_records_flat, employee_names_dict)
     """
+async def fetch_all_access(
+    session_cookie: str,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    employee_numbers_csv: Optional[str] = None,
+) -> tuple[list, dict]:
+    """
+    Fetch access data for all reportees in Photon Track batches.
+    If employee_numbers_csv is supplied (comma-separated), use it directly
+    and skip the GET /reportees call (which may not exist on all tenants).
+    Returns (all_records_flat, employee_names_dict)
+    """
     if not from_date or not to_date:
         from_date, to_date = get_week_range()
 
     all_records: list = []
-    reportees = await fetch_reportees(session_cookie)
-    employee_codes, employee_names = extract_reportee_index(reportees)
+    employee_names: dict[str, str] = {}
+
+    if employee_numbers_csv:
+        # Use configured employee numbers directly — skip GET /reportees
+        employee_codes = [c.strip() for c in employee_numbers_csv.split(',') if c.strip()]
+        print(f"[tracker] Using {len(employee_codes)} configured employee numbers")
+    else:
+        # Fall back to dynamic reportees discovery
+        try:
+            reportees = await fetch_reportees(session_cookie)
+            employee_codes, employee_names = extract_reportee_index(reportees)
+        except Exception as e:
+            print(f"[tracker] fetch_reportees failed ({e}); no employee codes available")
+            return all_records, employee_names
 
     if not employee_codes:
         return all_records, employee_names
@@ -183,6 +233,8 @@ async def fetch_all_access(
                     timeout=PHOTON_BATCH_TIMEOUT_SECONDS,
                 )
             return flatten_response_items(raw)
+        except PhotonTrackSessionExpired:
+            raise   # propagate so the API returns 401, enabling frontend cache fallback
         except asyncio.TimeoutError:
             print(f"[tracker] Batch {batch} timed out after {PHOTON_BATCH_TIMEOUT_SECONDS}s")
             return []
@@ -194,7 +246,12 @@ async def fetch_all_access(
     tasks = [asyncio.create_task(fetch_batch(batch)) for batch in batches]
     try:
         for task in asyncio.as_completed(tasks, timeout=PHOTON_REPORT_TIMEOUT_SECONDS):
-            all_records.extend(await task)
+            all_records.extend(await task)   # PhotonTrackSessionExpired propagates here
+    except PhotonTrackSessionExpired:
+        for t in tasks:
+            if not t.done(): t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise   # let the FastAPI handler return 401
     except asyncio.TimeoutError:
         pending_count = sum(1 for task in tasks if not task.done())
         print(f"[tracker] Report fetch timed out after {PHOTON_REPORT_TIMEOUT_SECONDS}s; cancelling {pending_count} pending batch(es)")

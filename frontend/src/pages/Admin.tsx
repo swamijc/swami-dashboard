@@ -10,6 +10,7 @@ export default function Admin() {
   const [userForm, setUserForm] = useState({ username: '', email: '', password: '', role: 'viewer' });
   const [userError, setUserError] = useState('');
   const [userMessage, setUserMessage] = useState('');
+  const [syncMsg, setSyncMsg] = useState('');
 
   const loadUsers = () => api.get('/admin/users').then(r => setUsers(r.data)).catch(() => {});
 
@@ -21,7 +22,16 @@ export default function Admin() {
 
   const [sessionForm, setSessionForm] = useState<Record<string, string>>({});
   const saveSession = async (serviceName: string) => {
-    await api.put(`/admin/configs/${serviceName}`, sessionForm);
+    const { employee_numbers, employee_names_map, ...rest } = sessionForm as any;
+    const payload: Record<string, any> = { ...rest };
+    if (employee_numbers !== undefined || employee_names_map !== undefined) {
+      const existingMap = employee_names_map ? JSON.parse(employee_names_map) : undefined;
+      payload.extra_config = {
+        ...(employee_numbers !== undefined ? { employee_numbers } : {}),
+        ...(existingMap ? { employee_names_map: existingMap } : {}),
+      };
+    }
+    await api.put(`/admin/configs/${serviceName}`, payload);
     alert('Session saved and encrypted.');
     setSessionForm({});
   };
@@ -62,73 +72,185 @@ export default function Admin() {
 
       {/* Session Tokens */}
       {tab === 'sessions' && (
-        <div className="space-y-5 max-w-2xl">
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-            <strong>Security:</strong> Session tokens are AES-256 encrypted before storage. After saving, raw values are never shown again.
-          </div>
-          {configs.map(cfg => (
-            <div key={cfg.service_name} className="bg-white border border-gray-200 rounded-xl p-5">
-              <h3 className="font-semibold text-gray-800 mb-1">{cfg.display_name}</h3>
-              <p className="text-xs text-gray-400 font-mono mb-4">{cfg.service_name}</p>
-              {cfg.service_name === 'photontrack_access' ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-gray-500">Open <strong>https://photontrack.photon.com/photontrack/#/manager</strong>, inspect the <strong>reportees</strong> or <strong>getReporteesAccess</strong> request, then paste the full Request Headers <strong>Cookie:</strong> value here. The app will extract <strong>myCookie</strong> and <strong>_shibsession_</strong> automatically.</p>
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">Full Cookie header from photontrack.photon.com</label>
-                    <textarea rows={4} placeholder="visid_incap_...=...; myCookie=value; _shibsession_646566...=..."
-                      onChange={e => setSessionForm(f => ({ ...f, cookie_header: e.target.value }))}
-                      className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
-                  </div>
-                </div>
-              ) : cfg.service_name.startsWith('photon') ? (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">myCookie value</label>
-                    <input type="password" placeholder="myCookie=value"
-                      onChange={e => setSessionForm(f => ({ ...f, session_cookie: e.target.value }))}
-                      className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">_shibsession_ value (full cookie string)</label>
-                    <textarea rows={2} placeholder="_shibsession_...=value"
-                      onChange={e => setSessionForm(f => ({ ...f, shibboleth_cookie: e.target.value }))}
-                      className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
-                  </div>
-                </div>
-              ) : cfg.service_name.startsWith('boots') ? (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">ASP.NET_SessionId</label>
-                    <input type="password" placeholder="y0kyczpcad04w5b4k2xzkcbw"
-                      onChange={e => setSessionForm(f => ({ ...f, asp_net_session: e.target.value }))}
-                      className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">CSRFToken</label>
-                    <input type="password" placeholder="66f8318b-354d-4274-ad5d-..."
-                      onChange={e => setSessionForm(f => ({ ...f, csrf_token: e.target.value }))}
-                      className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">api_access (full value)</label>
-                    <textarea rows={2} placeholder="SWAMI.K@EXT.BOOTS.COM:..."
-                      onChange={e => setSessionForm(f => ({ ...f, api_access: e.target.value }))}
-                      className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 block mb-1">k1 (full value)</label>
-                    <textarea rows={2} placeholder="3EB8727DBF1..."
-                      onChange={e => setSessionForm(f => ({ ...f, k1: e.target.value }))}
-                      className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
-                  </div>
-                </div>
-              ) : null}
-              <button onClick={() => saveSession(cfg.service_name)}
-                className="mt-4 bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg transition">
-                Save & Encrypt
-              </button>
+        <div className="space-y-8 max-w-2xl">
+
+          {/* ── Photon: auto-managed ── */}
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <h2 className="font-semibold text-gray-800">Photon Sessions</h2>
+              <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">Auto-managed via Chrome Extension</span>
             </div>
-          ))}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800 mb-4">
+              Sessions are captured automatically when you log into Photon in Chrome.
+              Install the extension from <code className="text-xs">browser-extension/</code>, then visiting
+              <strong> timetracker.photon.com</strong> or <strong>photontrack.photon.com</strong> refreshes
+              the session instantly — no manual paste needed.
+            </div>
+
+            <div className="space-y-3">
+              {/* Timetracker status */}
+              {(() => {
+                const svc = configs.find(c => c.service_name === 'photon_swami_entry');
+                const active = !!svc?.last_updated_at;
+                return (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-gray-800 text-sm">Photon Timetracker</div>
+                        <div className="text-xs text-gray-400 font-mono mt-0.5">timetracker.photon.com</div>
+                        <div className="text-xs text-gray-500 mt-1">Covers: Swami Entry · Prasanna Entry · Timesheet Approval</div>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {active ? '● Active' : '○ Not configured'}
+                      </span>
+                    </div>
+                    {svc?.last_updated_at && (
+                      <div className="text-xs text-gray-400 mt-2">
+                        Last refreshed: {new Date(svc.last_updated_at + 'Z').toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Photon Track status + employee numbers */}
+              {(() => {
+                const svc = configs.find(c => c.service_name === 'photontrack_access');
+                const active = !!svc?.last_updated_at;
+                return (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-gray-800 text-sm">Photon Track</div>
+                        <div className="text-xs text-gray-400 font-mono mt-0.5">photontrack.photon.com</div>
+                        <div className="text-xs text-gray-500 mt-1">Covers: Team Time Tracking</div>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {active ? '● Active' : '○ Not configured'}
+                      </span>
+                    </div>
+                    {svc?.last_updated_at && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        Last refreshed: {new Date(svc.last_updated_at + 'Z').toLocaleString()}
+                      </div>
+                    )}
+                    {/* Session status + emergency paste */}
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-xs font-medium text-gray-600 mb-1">Session cookie <span className="font-normal text-gray-400">(auto-managed by Chrome extension — paste here only if extension is unavailable)</span></p>
+                      <textarea rows={3}
+                        placeholder="Paste full Cookie: header from photontrack.photon.com request"
+                        onChange={e => setSessionForm(f => ({ ...f, cookie_header: e.target.value }))}
+                        className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-gray-100">
+                      <label className="text-xs font-medium text-gray-600 block mb-1">
+                        Team employee numbers
+                        <span className="font-normal text-gray-400 ml-1">(comma-separated — from the <code>employeenumber</code> payload field)</span>
+                      </label>
+                      <input type="text" placeholder="144267,153175,153149,..."
+                        onChange={e => setSessionForm(f => ({ ...f, employee_numbers: e.target.value.trim() }))}
+                        className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
+                      <p className="text-xs text-gray-400 mt-1">Saved separately — does not affect session cookies.</p>
+
+                      <label className="text-xs font-medium text-gray-600 block mb-1 mt-4">
+                        Employee name mapping
+                        <span className="font-normal text-gray-400 ml-1">(one per line: <code>code: Full Name</code>)</span>
+                      </label>
+                      <textarea rows={6}
+                        placeholder={"144267: Alice Brown\n153175: Prasanna V\n153149: John D"}
+                        onChange={e => {
+                          const lines = e.target.value.split('\n').filter(l => l.includes(':'));
+                          const map: Record<string, string> = {};
+                          lines.forEach(l => {
+                            const [code, ...rest] = l.split(':');
+                            if (code.trim()) map[code.trim()] = rest.join(':').trim();
+                          });
+                          setSessionForm(f => ({ ...f, employee_names_map: JSON.stringify(map) }));
+                        }}
+                        className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        <p className="text-xs text-gray-400 flex-1">Names show in the Individual Breakdown table instead of employee codes.</p>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setSyncMsg('Syncing…');
+                            try {
+                              const r = await api.post('/tracking/sync-names', {});
+                              setSyncMsg(`✅ ${r.data.message}`);
+                              api.get('/admin/configs').then(res => setConfigs(res.data));
+                            } catch (e: any) {
+                              setSyncMsg(`❌ ${e?.response?.data?.error || e.message}`);
+                            }
+                          }}
+                          className="shrink-0 text-xs px-3 py-1.5 bg-green-700 hover:bg-green-800 text-white rounded-lg transition"
+                        >
+                          ↻ Sync names from Timetracker
+                        </button>
+                      </div>
+                      {syncMsg && <p className="text-xs mt-1 font-medium text-gray-700">{syncMsg}</p>}
+                      <button onClick={() => saveSession('photontrack_access')}
+                        className="mt-3 bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg transition">
+                        Save Employee Config
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* ── Boots KI: manual ── */}
+          <div>
+            <h2 className="font-semibold text-gray-800 mb-1">Boots KI Sessions</h2>
+            <p className="text-xs text-gray-500 mb-4">Boots uses a separate auth system — these must be refreshed manually when your Boots session expires.</p>
+            <div className="space-y-5">
+              {configs.filter(c => c.service_name.startsWith('boots')).map(cfg => (
+                <div key={cfg.service_name} className="bg-white border border-gray-200 rounded-xl p-5">
+                  <h3 className="font-semibold text-gray-800 mb-1">{cfg.display_name}</h3>
+                  <p className="text-xs text-gray-400 font-mono mb-4">{cfg.service_name}</p>
+                  {cfg.last_updated_at && (
+                    <p className="text-xs text-gray-400 mb-3">Last updated: {new Date(cfg.last_updated_at + 'Z').toLocaleString()}</p>
+                  )}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">ASP.NET_SessionId</label>
+                      <input type="password" placeholder="y0kyczpcad04w5b4k2xzkcbw"
+                        onChange={e => setSessionForm(f => ({ ...f, asp_net_session: e.target.value }))}
+                        className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">CSRFToken</label>
+                      <input type="password" placeholder="66f8318b-354d-4274-ad5d-..."
+                        onChange={e => setSessionForm(f => ({ ...f, csrf_token: e.target.value }))}
+                        className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">api_access</label>
+                      <textarea rows={2} placeholder="SWAMI.K@EXT.BOOTS.COM:..."
+                        onChange={e => setSessionForm(f => ({ ...f, api_access: e.target.value }))}
+                        className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">k1</label>
+                      <textarea rows={2} placeholder="3EB8727DBF1..."
+                        onChange={e => setSessionForm(f => ({ ...f, k1: e.target.value }))}
+                        className="w-full border rounded px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-300 outline-none" />
+                    </div>
+                  </div>
+                  <button onClick={() => saveSession(cfg.service_name)}
+                    className="mt-4 bg-blue-700 hover:bg-blue-800 text-white text-sm px-4 py-2 rounded-lg transition">
+                    Save & Encrypt
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
       )}
 

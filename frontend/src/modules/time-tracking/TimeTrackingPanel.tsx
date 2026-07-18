@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../api/client';
 import WeeklyPieChart from './WeeklyPieChart';
 import DailyTable from './DailyTable';
@@ -32,30 +32,64 @@ function StatCard({ title, value, sub, color }: { title: string; value: string; 
 export default function TimeTrackingPanel() {
   const { user } = useAuth();
   const isViewer = user?.role === 'viewer';
-  const [report, setReport] = useState<any>(null);
+  const CACHE_KEY = 'swami-time-tracking-report';
+  const [report, setReport] = useState<any>(() => {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; }
+  });
+  const [usingCache, setUsingCache] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState('');
   const [sessionSet, setSessionSet] = useState<boolean | null>(null);
   const [selectedMonday, setSelectedMonday] = useState(() => toIsoDate(startOfWeek(new Date(), { weekStartsOn: 1 })));
   const week = getWeekRange(selectedMonday);
 
-  useEffect(() => {
-    api.get('/tracking/session-status')
-      .then(r => setSessionSet(r.data.session_set && r.data.shibboleth_set))
-      .catch(() => setSessionSet(false));
-  }, []);
-
-  const fetchReport = async () => {
-    setLoading(true); setError('');
+  const fetchReport = useCallback(async () => {
+    setLoading(true); setError(''); setUsingCache(false);
     try {
-      const r = await api.post('/tracking/report', { from_date: week.from, to_date: week.to });
+      const r = await api.post('/tracking/report', {
+        from_date: week.from,
+        to_date:   week.to,
+      });
       setReport(r.data);
+      // Cache the successful result so it shows even after session expires
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(r.data)); } catch { /* ignore */ }
     } catch (e: any) {
-      setError(e?.response?.data?.error || e.message || 'Failed to fetch report');
+      const msg = e?.response?.data?.error || e.message || 'Failed to fetch report';
+      // Session expired — show cached data if available
+      const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } })();
+      if (cached) {
+        setReport(cached);
+        setUsingCache(true);
+        setError('');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [week.from, week.to]);
+
+  // On mount: always try to fetch (uses cache if session fails).
+  useEffect(() => {
+    api.get('/tracking/session-status')
+      .then(r => {
+        const isSet = !!(r.data.session_set);
+        setSessionSet(isSet);
+        // Always attempt a fetch — if session expired, will fall back to cache
+        fetchReport();
+      })
+      .catch(() => { setSessionSet(false); fetchReport(); });
+  // fetchReport intentionally omitted — only run once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When the user picks a different week, refresh (uses cache if needed).
+  const isFirstRender = React.useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    fetchReport();
+  }, [selectedMonday]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Summary stats
   const meta = report?.meta;
@@ -105,7 +139,7 @@ export default function TimeTrackingPanel() {
             </div>
           )}
           <button
-            onClick={fetchReport}
+            onClick={() => fetchReport()}
             disabled={loading}
             className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
           >
@@ -113,6 +147,13 @@ export default function TimeTrackingPanel() {
           </button>
         </div>
       </div>
+
+      {usingCache && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-4 flex items-center gap-2">
+          <span>⚠</span>
+          <span>Showing cached data — session expired. Open <a href="https://photontrack.photon.com/photontrack/#/manager" target="_blank" rel="noreferrer" className="underline font-medium">photontrack.photon.com</a> in Chrome to refresh automatically.</span>
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-6">
@@ -125,11 +166,9 @@ export default function TimeTrackingPanel() {
           <div className="text-4xl mb-3">📈</div>
           <p className="text-gray-500 text-sm mb-1">No data loaded yet.</p>
           <p className="text-gray-400 text-xs mb-4">
-            {isViewer
-              ? 'Click Refresh Report to load the current week. If this fails, contact an admin.'
-              : 'Configure your Photon Track session in Admin → Session Tokens, then click Refresh Report.'}
+            Open <a href="https://photontrack.photon.com/photontrack/#/manager" target="_blank" rel="noreferrer" className="underline text-blue-600">photontrack.photon.com</a> in Chrome — the extension will save your session and load the report automatically.
           </p>
-          <button onClick={fetchReport} disabled={loading}
+          <button onClick={() => fetchReport()} disabled={loading}
             className="bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">
             Load This Week's Data
           </button>

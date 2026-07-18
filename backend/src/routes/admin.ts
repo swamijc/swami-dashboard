@@ -116,6 +116,17 @@ router.put('/users/:id/role', requireAuth, requireAdmin, (req: Request, res: Res
   res.json({ message: 'Role updated' });
 });
 
+router.delete('/users/:id', requireAuth, requireAdmin, (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const user = getDb().prepare(`SELECT username FROM users WHERE id=?`).get(id) as any;
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+  if (['admin', 'Swami', 'ViewSwami'].includes(user.username)) {
+    res.status(403).json({ error: 'Cannot delete protected user' }); return;
+  }
+  getDb().prepare(`DELETE FROM users WHERE id=?`).run(id);
+  res.json({ message: 'User deleted' });
+});
+
 // ── Team Members ─────────────────────────────────────────────────
 router.post('/team', requireAuth, requireAdmin, (req: Request, res: Response) => {
   const { name, email, photon_emp_id, photon_insight_id, photon_emp_code,

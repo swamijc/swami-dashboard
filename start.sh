@@ -19,6 +19,9 @@ if [ -f "$BASE/.env" ]; then
   set +a
 fi
 
+# Always use absolute DB path regardless of which directory node starts from
+export DB_PATH="$BASE/backend/data/dashboard.db"
+
 install_node_deps() {
   local dir="$1"
   cd "$dir"

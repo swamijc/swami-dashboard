@@ -1,9 +1,11 @@
 import httpx
+import os
 from typing import Optional
 from utils.form_encoder import build_ki_form_payload
 
-BASE_URL = "https://allianceboots.hosted.keyedinprojects.co.uk"
-SITE     = "KIE200143PROD"
+BASE_URL   = "https://allianceboots.hosted.keyedinprojects.co.uk"
+SITE       = "KIE200143PROD"
+VERIFY_SSL = os.getenv("BOOTS_KI_VERIFY_SSL", "false").lower() not in {"0", "false", "no"}
 
 
 def build_ki_headers(ki_cookie: str) -> dict:
@@ -61,7 +63,7 @@ async def submit_ki_timesheet(
             "message": "Dry run — no request sent",
         }
 
-    async with httpx.AsyncClient(verify=True, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=VERIFY_SSL, timeout=30.0) as client:
         resp = await client.post(url, content=form_body.encode("utf-8"), headers=headers)
         resp.raise_for_status()
         return {

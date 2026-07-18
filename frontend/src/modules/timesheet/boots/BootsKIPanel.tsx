@@ -74,21 +74,14 @@ export default function BootsKIPanel() {
   return (
     <div className="max-w-3xl">
 
-      <Card title="⚙️ Weekly Day Planner">
-        <p className="text-sm text-gray-500 mb-4">
-          Week of <strong>{getWeekStart()}</strong>. Toggle each day between Work (Y) and OoO (N) before submitting.
-        </p>
-        <WeekPlanner label="Swami" resource="KSWA1" hours={9} flags={swamiFlags} onChange={toggleSwami} />
-        <WeekPlanner label="PV (Prasanna)" resource="VILP1" hours={4.5} flags={pvFlags} onChange={togglePV} />
-      </Card>
-
       {/* Swami KI */}
-      <Card title="🥾 Swami's KI Timesheet (KSWA1)">
+      <Card title="👤 Swami's KI Timesheet (KSWA1)">
         <div className="text-sm text-gray-500 mb-4 space-y-1">
           <p><span className="font-medium">Endpoint:</span> POST /TimeEntry/SaveTimeEntry?Site=KIE200143PROD</p>
           <p><span className="font-medium">Schedule:</span> Every Monday at 1:45 PM IST</p>
           <p><span className="font-medium">Project:</span> PRJ7531 · PR-002 · Task 51830 &nbsp;·&nbsp; <span className="font-medium">Hours:</span> 9.00/day</p>
         </div>
+        <WeekPlanner label="Swami" resource="KSWA1" hours={9} flags={swamiFlags} onChange={toggleSwami} />
         {isAdmin && (
           <RunButton
             label="Submit Swami KI Timesheet"
@@ -102,12 +95,13 @@ export default function BootsKIPanel() {
       </Card>
 
       {/* PV KI */}
-      <Card title="🥾 PV's KI Timesheet (VILP1)">
+      <Card title="🧢 PV's KI Timesheet (VILP1)">
         <div className="text-sm text-gray-500 mb-4 space-y-1">
           <p><span className="font-medium">Endpoint:</span> POST /TimeEntry/SaveTimeEntry?Site=KIE200143PROD</p>
           <p><span className="font-medium">Schedule:</span> Every Monday at 1:45 PM IST</p>
           <p><span className="font-medium">Project:</span> PRJ7531 · PR-002 · Task 51830 &nbsp;·&nbsp; <span className="font-medium">Hours:</span> 4.50/day (part-time)</p>
         </div>
+        <WeekPlanner label="PV (Prasanna)" resource="VILP1" hours={4.5} flags={pvFlags} onChange={togglePV} />
         {isAdmin && (
           <RunButton
             label="Submit PV KI Timesheet"

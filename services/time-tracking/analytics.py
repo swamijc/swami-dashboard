@@ -100,10 +100,13 @@ def normalise_records(raw_response: Any, employee_numbers: list[str]) -> list[di
         if isinstance(data, list):
             return data
         if isinstance(data, dict):
-            for key in ("data", "records", "timesheets", "reporteeData", "accessData", "entries"):
+            # Ordered by most likely Photon Track key names
+            for key in ("reporteeAccessData", "accessData", "reporteeData",
+                        "data", "records", "timesheets", "entries",
+                        "employeeAccessData", "timeAccessData", "result"):
                 if key in data and isinstance(data[key], list):
                     return data[key]
-            # Try any list value
+            # Fall back: first list-valued key found
             for v in data.values():
                 if isinstance(v, list):
                     return v
@@ -137,12 +140,14 @@ def normalise_records(raw_response: Any, employee_numbers: list[str]) -> list[di
 
         # Hours calculation — try multiple field patterns
         hours = 0.0
-        if "totalHours" in item:
+        if "totalHours" in item and item["totalHours"]:
             hours = parse_minutes(item["totalHours"])
-        elif "totalMinutes" in item:
+        elif "totalMinutes" in item and item["totalMinutes"]:
             hours = parse_minutes(item["totalMinutes"])
         elif "hoursWorked" in item:
             hours = parse_minutes(item["hoursWorked"])
+        elif "swipeInTime" in item and "swipeOutTime" in item:
+            hours = parse_time_to_hours(str(item["swipeInTime"]), str(item["swipeOutTime"]))
         elif "fromTime" in item and "toTime" in item:
             hours = parse_time_to_hours(str(item["fromTime"]), str(item["toTime"]))
         elif "checkIn" in item and "checkOut" in item:

@@ -22,6 +22,8 @@ interface PipelineRecord extends ResourceForm {
   flowType: FlowType;
   steps: Record<string, boolean>;
   createdAt: string;
+  odcEroomUrl?: string;
+  odcEmailSent?: boolean;
 }
 
 const providerTabs = [
@@ -63,6 +65,11 @@ const workflowSteps: Record<Provider, Record<FlowType, string[]>> = {
       'Leaver request raised and approved',
     ],
   },
+};
+
+// Steps that should open an external URL when clicked.
+const stepLinks: Record<string, string> = {
+  'ODC completion': 'https://photon.atlassian.net/jira/core/projects/BOOTSEROOM/board?filter=&groupBy=none',
 };
 
 const emptyForm: ResourceForm = {
@@ -177,6 +184,13 @@ export default function Onboarding() {
         ? { ...record, steps: { ...record.steps, [step]: !record.steps[step] } }
         : record
     )));
+  };
+
+  const updateRecordField = <K extends keyof PipelineRecord>(recordId: string, field: K, value: PipelineRecord[K]) => {
+    if (isViewer) return;
+    setRecords(current => current.map(record =>
+      record.id === recordId ? { ...record, [field]: value } : record
+    ));
   };
 
   const removeRecord = (recordId: string) => {
@@ -299,9 +313,26 @@ export default function Onboarding() {
                 </h2>
                 <p className="text-xs text-gray-500">{isViewer ? 'Viewer access shows workflow status only.' : 'Use each workflow button to mark the step completed.'}</p>
               </div>
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                {filteredRecords.length} active
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                  {filteredRecords.length} active
+                </span>
+                {!isViewer && filteredRecords.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Remove ALL ${filteredRecords.length} record(s) in this view? This cannot be undone.`)) {
+                        setRecords(current =>
+                          current.filter(r => !(r.provider === provider && r.flowType === flowType))
+                        );
+                      }
+                    }}
+                    className="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-md px-2 py-1 transition"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
             </div>
 
             {filteredRecords.length === 0 ? (
@@ -332,21 +363,53 @@ export default function Onboarding() {
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                         {recordSteps.map(step => {
                           const completed = Boolean(record.steps[step]);
+                          const stepUrl = stepLinks[step];
                           return (
                             <button
                               key={step}
                               type="button"
-                              onClick={() => toggleStep(record.id, step)}
-                              disabled={isViewer}
+                              onClick={() => {
+                                if (!isViewer) toggleStep(record.id, step);
+                                if (stepUrl) window.open(stepUrl, '_blank', 'noopener,noreferrer');
+                              }}
+                              disabled={isViewer && !stepUrl}
                               className={`text-left rounded-lg border px-3 py-2 text-sm transition
-                                ${completed ? 'border-green-200 bg-green-100 text-green-800' : 'border-gray-200 bg-white text-gray-700'} ${isViewer ? 'cursor-default' : 'hover:border-blue-500 hover:text-blue-700'}`}
+                                ${completed ? 'border-green-200 bg-green-100 text-green-800' : 'border-gray-200 bg-white text-gray-700'} ${isViewer && !stepUrl ? 'cursor-default' : 'hover:border-blue-500 hover:text-blue-700'}`}
                             >
                               <span className="font-medium">{completed ? 'Done' : 'Pending'}</span>
+                              {stepUrl && <span className="ml-1 text-xs opacity-60">↗</span>}
                               <span className="block text-xs mt-0.5 opacity-80">{step}</span>
                             </button>
                           );
                         })}
                       </div>
+
+                      {/* ODC details — shown only for Photon onboarding records */}
+                      {record.provider === 'photon' && record.flowType === 'onboarding' && (
+                        <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col sm:flex-row sm:items-end gap-3">
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Boots eRoom URL</label>
+                            <input
+                              type="url"
+                              value={record.odcEroomUrl || ''}
+                              onChange={e => updateRecordField(record.id, 'odcEroomUrl', e.target.value)}
+                              disabled={isViewer}
+                              placeholder="https://allianceboots.atlassian.net/..."
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 disabled:bg-gray-50"
+                            />
+                          </div>
+                          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none pb-2">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(record.odcEmailSent)}
+                              onChange={e => updateRecordField(record.id, 'odcEmailSent', e.target.checked)}
+                              disabled={isViewer}
+                              className="w-4 h-4 accent-blue-700"
+                            />
+                            Email sent to employee
+                          </label>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

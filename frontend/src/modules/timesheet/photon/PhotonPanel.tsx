@@ -4,8 +4,17 @@ import RunButton from '../../../components/RunButton';
 import JobHistory from '../../../components/JobHistory';
 import { useAuth } from '../../../auth/AuthContext';
 
+// Format a date using LOCAL calendar parts — avoids UTC midnight boundary
+// crossing on IST machines (UTC+5:30) where toISOString() rolls back one day.
+function localIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function toIsoDate(date: Date) {
-  return date.toISOString().split('T')[0];
+  return localIsoDate(date);
 }
 
 function startOfWeek(date: Date) {
@@ -13,12 +22,6 @@ function startOfWeek(date: Date) {
   const day = copy.getDay();
   const diff = copy.getDate() - day + (day === 0 ? -6 : 1);
   copy.setDate(diff);
-  return copy;
-}
-
-function addDays(date: Date, days: number) {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
   return copy;
 }
 
@@ -53,18 +56,74 @@ function formatDateTime(value?: string) {
   return value ? value.replace('T', ' ').slice(0, 16) : '—';
 }
 
+// Is the current local time past 1:14 PM IST (07:44 UTC)?
+function isPastScheduledTime(): boolean {
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  const utcMin = now.getUTCMinutes();
+  return utcHour > 8 || (utcHour === 8 && utcMin >= 15);
+}
+
+function WeekGrid({ days }: { days?: any[] }) {
+  const today = new Date().toISOString().split('T')[0];
+  const afterSchedule = isPastScheduledTime();
+
+  if (!days || days.length === 0) {
+    return <div className="text-xs text-gray-400 py-2 animate-pulse">Loading week…</div>;
+  }
+
+  return (
+    <div className="grid grid-cols-5 gap-1.5 mb-4">
+      {days.map((day: any) => {
+        const isToday = day.date === today;
+        const isPast = day.date < today;
+        const run = day.run;
+
+        let bg = 'bg-gray-50 border-gray-100';
+        let label = '—';
+        let labelCls = 'text-gray-400';
+
+        if (run) {
+          if (run.status === 'success') {
+            bg = 'bg-green-50 border-green-200'; label = '✓ done'; labelCls = 'text-green-700';
+          } else if (run.status === 'dry_run') {
+            bg = 'bg-blue-50 border-blue-200'; label = '✓ dry'; labelCls = 'text-blue-700';
+          } else if (run.status === 'failed') {
+            bg = 'bg-red-50 border-red-200'; label = '✗ failed'; labelCls = 'text-red-700';
+          } else if (run.status === 'running') {
+            bg = 'bg-yellow-50 border-yellow-200'; label = '⟳ running'; labelCls = 'text-yellow-700';
+          }
+        } else if (isToday && !afterSchedule) {
+          bg = 'bg-blue-50 border-blue-200'; label = '⏰ 1:45 PM'; labelCls = 'text-blue-600';
+        } else if (isToday || isPast) {
+          bg = 'bg-amber-50 border-amber-200'; label = '⚠ not run'; labelCls = 'text-amber-700';
+        }
+
+        return (
+          <div
+            key={day.date}
+            className={`rounded-lg border p-2 text-center ${bg} ${isToday ? 'ring-2 ring-blue-400' : ''}`}
+            title={day.date}
+          >
+            <div className="text-xs font-semibold text-gray-700">{day.label}</div>
+            <div className="text-xs text-gray-400">{day.date.slice(5)}</div>
+            <div className={`text-xs font-medium mt-1 ${labelCls}`}>{label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function PhotonPanel() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const today = new Date().toISOString().split('T')[0];
-  const currentMonday = startOfWeek(new Date());
-  const minMonday = startOfWeek(addDays(new Date(), -31));
-  const [weekStart, setWeekStart] = useState(toIsoDate(currentMonday));
+  const today = localIsoDate(new Date());
+  const weekStart = localIsoDate(startOfWeek(new Date()));
   const [statusSummary, setStatusSummary] = useState<any>(null);
   const [approvalSummary, setApprovalSummary] = useState<any>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState('');
-
   const loadStatus = async () => {
     setStatusLoading(true);
     setStatusError('');
@@ -84,37 +143,175 @@ export default function PhotonPanel() {
 
   useEffect(() => { loadStatus(); }, [weekStart]);
 
+  const swamiEntry = statusSummary?.entries?.find((e: any) => e.key === 'swami');
+  const prasannaEntry = statusSummary?.entries?.find((e: any) => e.key === 'prasanna');
+
+  const [pmoStatus, setPmoStatus] = React.useState<{ status: string; message: string; count: number } | null>(null);
+  const [pmoLoading, setPmoLoading] = React.useState(false);
+
+  const submitToPmo = async (dryRun = false) => {
+    setPmoLoading(true);
+    setPmoStatus(null);
+    try {
+      const resp = await api.post('/timesheet/photon/swami/pmo-submit', { dry_run: dryRun });
+      const d = resp.data;
+      if (d.status === 'no_pending') {
+        setPmoStatus({ status: 'none', message: 'No pending PMO review requests found.', count: 0 });
+      } else if (d.status === 'success') {
+        setPmoStatus({ status: 'success', message: `Request submitted to PMO (${d.submitted_count} item${d.submitted_count !== 1 ? 's' : ''})`, count: d.submitted_count });
+      } else if (d.dry_run) {
+        setPmoStatus({ status: 'dry', message: `Dry run — ${d.pending_count} item(s) would be submitted`, count: d.pending_count || 0 });
+      } else {
+        setPmoStatus({ status: 'info', message: d.message || JSON.stringify(d).slice(0, 100), count: 0 });
+      }
+    } catch (err: any) {
+      setPmoStatus({ status: 'error', message: err?.response?.data?.error || err.message, count: 0 });
+    } finally {
+      setPmoLoading(false);
+    }
+  };
+
+  const todayDayStatus = (entry: any) => {
+    if (!entry?.week_days) return null;
+    return entry.week_days.find((d: any) => d.date === today) || null;
+  };
+
+  const todaySwami = todayDayStatus(swamiEntry);
+  const todayPrasanna = todayDayStatus(prasannaEntry);
+
   return (
     <div className="max-w-3xl">
+
       {/* Swami's Entry */}
-      <Card title="⏱ Swami's Timesheet Entry">
-        <div className="text-sm text-gray-500 mb-4 space-y-1">
-          <p><span className="font-medium">Endpoint:</span> POST /timetracker/updatetimesheet</p>
-          <p><span className="font-medium">Schedule:</span> Mon–Fri at 1:45 PM IST (auto if not logged in)</p>
-          <p><span className="font-medium">Date:</span> {today} &nbsp;·&nbsp; <span className="font-medium">Hours:</span> 528 min (8h 48m)</p>
+      <Card title="👤 Swami's Timesheet Entry">
+        <div className="flex flex-wrap gap-4 text-xs text-gray-500 mb-3">
+          <span><span className="font-medium text-gray-700">Schedule:</span> Mon–Fri at 1:45 PM IST (auto)</span>
+          <span><span className="font-medium text-gray-700">Default:</span> 8:48 (528 min/day)</span>
+          <span><span className="font-medium text-gray-700">Employee:</span> 17463</span>
+          <span><span className="font-medium text-gray-700">Endpoint:</span> POST /timetracker/updatetimesheet</span>
         </div>
+
+        {/* Mon–Fri week grid */}
+        <WeekGrid days={swamiEntry?.week_days} />
+
+        {/* Today status banner */}
+        {todaySwami && todaySwami.run && (
+          <div className={`mb-4 text-xs rounded-lg px-3 py-2 flex items-center gap-2 ${
+            todaySwami.run.status === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+            todaySwami.run.status === 'failed'  ? 'bg-red-50 border border-red-200 text-red-800'    :
+            'bg-gray-50 border border-gray-200 text-gray-700'
+          }`}>
+            <span className="font-medium">Today ({today}):</span>
+            <span>{todaySwami.run.status === 'success' ? '✅ Submitted successfully' :
+                   todaySwami.run.status === 'failed'  ? `❌ Failed — ${todaySwami.run.error_message || 'see logs'}` :
+                   todaySwami.run.status}</span>
+            <span className="text-gray-400 ml-auto">{formatDateTime(todaySwami.run.started_at)}</span>
+          </div>
+        )}
+        {todaySwami && !todaySwami.run && (
+          <div className="mb-4 text-xs rounded-lg px-3 py-2 bg-blue-50 border border-blue-200 text-blue-800 flex items-center gap-2">
+            <span className="font-medium">Today ({today}):</span>
+            <span>{isPastScheduledTime() ? '⚠ Auto-submit did not run — use button below to submit manually' : '⏰ Scheduled for 1:45 PM IST'}</span>
+          </div>
+        )}
+
         {isAdmin && (
           <RunButton
             label="Submit Swami's Timesheet"
             onRun={async (dryRun) => {
-              await api.post('/timesheet/photon/swami/submit', { dry_run: dryRun });
+              const resp = await api.post('/timesheet/photon/swami/submit', { dry_run: dryRun });
+              if (resp.data?.status === 'already_submitted') {
+                throw new Error(`⚠ ${resp.data.message}`);
+              }
+              await loadStatus();
             }}
           />
+        )}
+
+        {/* Submit to PMO section */}
+        {isAdmin && (
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-xs font-semibold text-gray-700">📬 Submit to PMO</span>
+              <span className="text-xs text-gray-400">Sends timesheet review request → you receive "Defaulter Timesheet Approval Request Notification" email</span>
+            </div>
+            {pmoStatus && (
+              <div className={`mb-3 text-xs rounded-lg px-3 py-2 flex items-center gap-2 ${
+                pmoStatus.status === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+                pmoStatus.status === 'error'   ? 'bg-red-50 border border-red-200 text-red-800' :
+                pmoStatus.status === 'none'    ? 'bg-gray-50 border border-gray-200 text-gray-600' :
+                'bg-blue-50 border border-blue-200 text-blue-800'
+              }`}>
+                <span>
+                  {pmoStatus.status === 'success' ? '✅' :
+                   pmoStatus.status === 'error'   ? '❌' :
+                   pmoStatus.status === 'none'    ? '—'  : 'ℹ'}
+                </span>
+                <span>{pmoStatus.message}</span>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                disabled={pmoLoading}
+                onClick={() => submitToPmo(false)}
+                className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white text-xs font-medium rounded-lg"
+              >
+                {pmoLoading ? 'Submitting…' : 'Submit to PMO'}
+              </button>
+              <button
+                disabled={pmoLoading}
+                onClick={() => submitToPmo(true)}
+                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-xs font-medium rounded-lg border border-gray-300"
+              >
+                Dry Run
+              </button>
+            </div>
+          </div>
         )}
       </Card>
 
       {/* Prasanna's Entry */}
-      <Card title="📋 Prasanna's Timesheet Entry">
-        <div className="text-sm text-gray-500 mb-4 space-y-1">
-          <p><span className="font-medium">Endpoint:</span> POST /timetracker/insertXls</p>
-          <p><span className="font-medium">Schedule:</span> Every Monday at 1:45 PM IST</p>
-          <p><span className="font-medium">Resource:</span> prasanna_vi (102014) &nbsp;·&nbsp; <span className="font-medium">Hours:</span> 528 min/day × 5 days</p>
+      <Card title="👮 Prasanna's Timesheet Entry">
+        <div className="flex flex-wrap gap-4 text-xs text-gray-500 mb-3">
+          <span><span className="font-medium text-gray-700">Schedule:</span> Mon–Fri at 1:45 PM IST (one day per run)</span>
+          <span><span className="font-medium text-gray-700">Default:</span> 8:48 (528 min/day × 5 days)</span>
+          <span><span className="font-medium text-gray-700">Employee:</span> 102014</span>
+          <span><span className="font-medium text-gray-700">Endpoint:</span> POST /timetracker/insertXls</span>
         </div>
+
+        {/* Mon–Fri week grid */}
+        <WeekGrid days={prasannaEntry?.week_days} />
+
+        {/* Today status banner */}
+        {todayPrasanna && todayPrasanna.run && (
+          <div className={`mb-4 text-xs rounded-lg px-3 py-2 flex items-center gap-2 ${
+            todayPrasanna.run.status === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+            todayPrasanna.run.status === 'failed'  ? 'bg-red-50 border border-red-200 text-red-800'    :
+            'bg-gray-50 border border-gray-200 text-gray-700'
+          }`}>
+            <span className="font-medium">Today ({today}):</span>
+            <span>{todayPrasanna.run.status === 'success' ? '✅ Submitted successfully' :
+                   todayPrasanna.run.status === 'failed'  ? `❌ Failed — ${todayPrasanna.run.error_message || 'see logs'}` :
+                   todayPrasanna.run.status}</span>
+            <span className="text-gray-400 ml-auto">{formatDateTime(todayPrasanna.run.started_at)}</span>
+          </div>
+        )}
+        {todayPrasanna && !todayPrasanna.run && (
+          <div className="mb-4 text-xs rounded-lg px-3 py-2 bg-blue-50 border border-blue-200 text-blue-800 flex items-center gap-2">
+            <span className="font-medium">Today ({today}):</span>
+            <span>{isPastScheduledTime() ? '⚠ Auto-submit did not run — use button below to submit manually' : '⏰ Scheduled for 1:45 PM IST'}</span>
+          </div>
+        )}
+
         {isAdmin && (
           <RunButton
             label="Submit Prasanna's Timesheet"
             onRun={async (dryRun) => {
-              await api.post('/timesheet/photon/prasanna/submit', { dry_run: dryRun });
+              const resp = await api.post('/timesheet/photon/prasanna/submit', { dry_run: dryRun });
+              if (resp.data?.status === 'already_submitted') {
+                throw new Error(`⚠ ${resp.data.message}`);
+              }
+              await loadStatus();
             }}
           />
         )}
@@ -126,7 +323,6 @@ export default function PhotonPanel() {
           <p><span className="font-medium">Endpoint:</span> POST /timetracker/approvedisputetimesheet</p>
           <p><span className="font-medium">Schedule:</span> Daily at 1:45 PM and 8:00 PM IST — <span className="text-blue-600 font-medium">always auto-runs</span></p>
           <p><span className="font-medium">Approver:</span> swaminathan_k (emp_id: 17463)</p>
-          <p className="text-amber-600 text-xs mt-2">⚠ Pending timesheets GET endpoint not yet configured — update in Admin → Service Configs.</p>
         </div>
         <div className="mb-4 overflow-x-auto border border-gray-100 rounded-lg">
           <table className="w-full text-sm">
@@ -178,68 +374,6 @@ export default function PhotonPanel() {
           <JobHistory service="photon_swami_entry" />
         </Card>
       )}
-
-      <Card title="📆 Photon Timesheet Status">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-4">
-          <div className="text-sm text-gray-500">
-            <p>Check current week or previous weeks up to one month.</p>
-            {statusSummary && <p className="text-xs text-gray-400 mt-1">Showing {statusSummary.week_start} to {statusSummary.week_end}</p>}
-          </div>
-          <div className="flex items-end gap-2">
-            <label className="text-xs font-medium text-gray-600">
-              Week start
-              <input
-                type="date"
-                min={toIsoDate(minMonday)}
-                max={toIsoDate(currentMonday)}
-                value={weekStart}
-                onChange={event => setWeekStart(toIsoDate(startOfWeek(new Date(`${event.target.value}T00:00:00`))))}
-                className="mt-1 block border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
-            <button
-              onClick={loadStatus}
-              disabled={statusLoading}
-              className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-            >
-              {statusLoading ? 'Checking…' : 'Refresh'}
-            </button>
-          </div>
-        </div>
-        {statusError && <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{statusError}</div>}
-        <div className="space-y-3">
-          {(statusSummary?.entries || []).map((entry: any) => (
-            <div key={entry.key} className="border border-gray-100 rounded-lg p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="font-medium text-gray-800">{entry.title}</div>
-                  <div className="text-xs text-gray-400">{entry.resource} · {entry.employee}</div>
-                </div>
-                <Badge value={entry.dashboard_submission.inferred_status} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-xs">
-                <div>
-                  <div className="text-gray-400">Photon Status Lookup</div>
-                  <Badge value={entry.photon_status_lookup.status} />
-                </div>
-                <div>
-                  <div className="text-gray-400">Last Dashboard Run</div>
-                  <div className="text-gray-700">{formatDateTime(entry.dashboard_submission.last_run?.started_at)}</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Run Result</div>
-                  <div className="text-gray-700">{entry.dashboard_submission.last_run?.status || '—'}</div>
-                </div>
-              </div>
-              {!entry.photon_status_lookup.configured && (
-                <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                  {entry.photon_status_lookup.message}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </Card>
 
     </div>
   );

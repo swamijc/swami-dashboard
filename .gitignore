@@ -34,5 +34,8 @@ data/
 *.sqlite3
 *.db
 
+# Conversation logs (contain session/internal API details)
+conversation_logs/
+
 # Local editor state
 .vscode/settings.json

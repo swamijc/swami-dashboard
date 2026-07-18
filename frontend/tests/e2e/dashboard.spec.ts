@@ -51,7 +51,8 @@ test('admin can login and view the code quality dashboard', async ({ page }) => 
 test('viewer can open Jira Onboarding and Quality in read-only mode', async ({ page }) => {
   await loginAsAdmin(page);
   const username = `viewer-${Date.now()}`;
-  await page.request.post('/api/admin/users', {
+  const adminRequest = page.request;
+  await adminRequest.post('/api/admin/users', {
     data: {
       username,
       email: `${username}@dashboard.local`,
@@ -96,6 +97,14 @@ test('viewer can open Jira Onboarding and Quality in read-only mode', async ({ p
   await expect(page.getByText('View-only access')).toBeVisible();
   await expect(page.getByRole('button', { name: /Approve Move to QA|Approving QA/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Approve Move to PROD|Approving PROD/ })).toHaveCount(0);
+
+  // Clean up — delete the temp viewer so it doesn't accumulate across test runs
+  await loginAsAdmin(page);
+  const allUsers = await (await adminRequest.get('/api/admin/users')).json();
+  const tempUser = allUsers.find((u: any) => u.username === username);
+  if (tempUser) {
+    await adminRequest.delete(`/api/admin/users/${tempUser.id}`);
+  }
 });
 
 test('login and quality pages have no critical accessibility violations', async ({ page }) => {
