@@ -16,9 +16,15 @@ import releaseRouter from './routes/release';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+// Extra origins allowed — supports Cloudflare Tunnel URLs (comma-separated)
+const EXTRA_ORIGINS = (process.env.EXTRA_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const ALLOWED_ORIGINS = [FRONTEND_URL, ...EXTRA_ORIGINS];
 
 export function createApp() {
   const app = express();
+
+  // Trust the first proxy (cloudflared / nginx) so req.secure works correctly
+  app.set('trust proxy', 1);
 
   // ── Security middleware ──────────────────────────────────────────
   app.use(helmet({
@@ -27,7 +33,11 @@ export function createApp() {
   }));
 
   app.use(cors({
-    origin: FRONTEND_URL,
+    origin: (origin, cb) => {
+      // Allow requests with no origin (curl, mobile apps) or whitelisted origins
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      cb(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
     methods: ['GET','POST','PUT','DELETE','OPTIONS']
   }));
@@ -42,9 +52,10 @@ export function createApp() {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      // secure=true when behind HTTPS proxy (cloudflared) or in production
+      secure: process.env.NODE_ENV === 'production' || !!process.env.EXTRA_ORIGINS,
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: process.env.EXTRA_ORIGINS ? 'none' : 'lax',
       maxAge: 8 * 60 * 60 * 1000  // 8 hours
     }
   }));

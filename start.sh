@@ -96,11 +96,50 @@ FRONTEND_PID=$!
 
 sleep 3
 
+# ── Optional Cloudflare Tunnel ───────────────────────────────────
+TUNNEL_URL=""
+if command -v cloudflared >/dev/null 2>&1; then
+  echo "[+] Starting Cloudflare Tunnel (port 5173)..."
+  TUNNEL_LOG="$LOG_DIR/tunnel.log"
+  cloudflared tunnel --url http://localhost:5173 \
+    --no-autoupdate \
+    >> "$TUNNEL_LOG" 2>&1 &
+  TUNNEL_PID=$!
+  # Wait up to 15s for tunnel URL to appear in log
+  for i in $(seq 1 15); do
+    TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1 || true)
+    [ -n "$TUNNEL_URL" ] && break
+    sleep 1
+  done
+  if [ -n "$TUNNEL_URL" ]; then
+    # Inject URL into .env so the backend allows CORS from it
+    if grep -q '^EXTRA_ORIGINS=' "$BASE/.env" 2>/dev/null; then
+      sed -i '' "s|^EXTRA_ORIGINS=.*|EXTRA_ORIGINS=$TUNNEL_URL|" "$BASE/.env"
+    else
+      echo "EXTRA_ORIGINS=$TUNNEL_URL" >> "$BASE/.env"
+    fi
+    # Restart backend with updated EXTRA_ORIGINS
+    kill $BACKEND_PID 2>/dev/null || true
+    sleep 1
+    cd "$BASE/backend"
+    export EXTRA_ORIGINS="$TUNNEL_URL"
+    node --experimental-sqlite dist/index.js \
+      >> "$LOG_DIR/backend.log" 2>&1 &
+    BACKEND_PID=$!
+    sleep 2
+  fi
+else
+  echo "[*] cloudflared not found — skipping tunnel (run: brew install cloudflared)"
+fi
+
 echo ""
 echo "======================================================"
 echo "  All services started!"
 echo "======================================================"
 echo "  Frontend   → http://localhost:5173"
+if [ -n "$TUNNEL_URL" ]; then
+echo "  External   → $TUNNEL_URL  ← access from anywhere"
+fi
 echo "  API Gateway → http://localhost:3001/api/health"
 echo "  Photon Svc  → http://localhost:8011/health"
 echo "  Boots KI    → http://localhost:8012/health"
@@ -108,6 +147,7 @@ echo ""
 echo "  Login: admin / Admin@1234!"
 echo ""
 echo "  PIDs: backend=$BACKEND_PID  photon=$PHOTON_PID  boots=$BOOTS_PID  tracking=$TRACKING_PID  frontend=$FRONTEND_PID"
+[ -n "$TUNNEL_PID" ] && echo "  Tunnel PID: $TUNNEL_PID  (log: $LOG_DIR/tunnel.log)"
 echo "  Logs: $LOG_DIR/"
 echo "======================================================"
 echo ""
