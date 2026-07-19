@@ -26,6 +26,20 @@ interface JiraReport {
   issues: JiraIssue[];
 }
 
+interface TeamJiraChart {
+  id: string;
+  title: string;
+  svg: string;
+}
+
+interface TeamJiraCharts {
+  selected_team: string;
+  available_teams: string[];
+  total_issues: number;
+  total_story_points: number;
+  charts: TeamJiraChart[];
+}
+
 function toLocalDate(value?: string | null): Date | null {
   if (!value) return null;
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
@@ -59,6 +73,10 @@ export default function JiraDueDate() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState<'All' | 'Story' | 'Bug' | 'Defect'>('All');
   const [labelFilter, setLabelFilter] = useState('All');
+  const [teamJiraOpen, setTeamJiraOpen] = useState(false);
+  const [teamCharts, setTeamCharts] = useState<TeamJiraCharts | null>(null);
+  const [teamChartFilter, setTeamChartFilter] = useState('All');
+  const [teamChartsLoading, setTeamChartsLoading] = useState(false);
   const chartColors = ['#1d4ed8', '#0f766e', '#f59e0b', '#dc2626'];
 
   const loadReport = async () => {
@@ -80,10 +98,38 @@ export default function JiraDueDate() {
     }
   };
 
+  const loadTeamJiraCharts = async (team = teamChartFilter) => {
+    setTeamChartsLoading(true);
+    setAlert('');
+    setError('');
+    try {
+      const response = await api.post('/jira/team-charts', isViewer ? { team } : { jql, team });
+      setTeamCharts(response.data);
+    } catch (err: any) {
+      if (err?.response?.data?.auth_required) {
+        setAlert(err.response.data.message || 'login to Boots JIRA using browser');
+      } else {
+        setError(err?.response?.data?.error || err.message || 'Failed to generate Team JIRA diagrams');
+      }
+    } finally {
+      setTeamChartsLoading(false);
+    }
+  };
+
+  const openTeamJira = async () => {
+    setTeamJiraOpen(true);
+    if (!teamCharts) await loadTeamJiraCharts();
+  };
+
+  const refreshTeamJira = async () => {
+    await loadTeamJiraCharts();
+  };
+
   useEffect(() => { loadReport(); }, []);
 
   const teams = useMemo(() => [...new Set((report?.issues || []).map(issue => issue.team))].sort(), [report]);
   const statuses = useMemo(() => [...new Set((report?.issues || []).map(issue => issue.status))].sort(), [report]);
+  const teamChartOptions = useMemo(() => teamCharts?.available_teams?.length ? teamCharts.available_teams : teams, [teamCharts, teams]);
 
   const filteredIssues = useMemo(() => {
     return (report?.issues || [])
@@ -233,18 +279,74 @@ export default function JiraDueDate() {
     <div>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">JIRA Due Date</h1>
-          <p className="text-sm text-gray-500">Developer completion trend from Ready for Progressive SIT date and Jira Due date.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{teamJiraOpen ? 'Story Point Tracker for All Team' : 'JIRA Due Date'}</h1>
+          <p className="text-sm text-gray-500">{teamJiraOpen ? 'Python-generated issue distribution, status, story point, and overdue charts from live JIRA data.' : 'Developer completion trend from Ready for Progressive SIT date and Jira Due date.'}</p>
         </div>
         <div className="flex gap-2">
           <Link to="/jira" className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition">JIRA Query</Link>
           <Link to="/jira/due-date" className="px-4 py-2 rounded-lg bg-blue-700 text-sm font-medium text-white transition">JIRA Due Date</Link>
-          <a href="https://bootsuk.atlassian.net/wiki/spaces/cdc/pages/1443430401/Story+Point+Tracker+for+All+Team" target="_blank" rel="noreferrer" className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition">Team JIRA ↗</a>
+          <button type="button" onClick={openTeamJira} disabled={teamChartsLoading} className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition disabled:opacity-50">{teamChartsLoading ? 'Loading...' : 'Team JIRA'}</button>
         </div>
       </div>
 
       {alert && <div className="bg-amber-100 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 mb-5 text-sm">{alert}</div>}
       {error && <div className="bg-red-100 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-5 text-sm">{error}</div>}
+
+      {teamJiraOpen && (
+        <div className="bg-white rounded-xl border border-gray-200 mb-5 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Story Point Tracker for All Team</h2>
+            <div className="flex gap-2">
+              <button type="button" onClick={refreshTeamJira} disabled={teamChartsLoading} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition disabled:opacity-50">{teamChartsLoading ? 'Refreshing...' : 'Refresh'}</button>
+              <button type="button" onClick={() => setTeamJiraOpen(false)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition">Close</button>
+            </div>
+          </div>
+          <div className="p-5 max-h-[72vh] overflow-auto bg-gray-50/50">
+            {teamChartsLoading && <div className="text-sm text-gray-500 mb-4">Loading Story Point Tracker...</div>}
+            {teamCharts?.charts?.length ? (
+              <div>
+                <div className="flex flex-col gap-1 mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900">Python generated pie chart</h3>
+                  <p className="text-xs text-gray-500">
+                    {teamCharts.selected_team && teamCharts.selected_team !== 'All' ? `${teamCharts.selected_team} · ` : ''}{teamCharts.total_issues} issues · {teamCharts.total_story_points} story points · generated from live JIRA data
+                  </p>
+                </div>
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="text-xs text-gray-500 flex items-center gap-2">
+                    Team
+                    <select
+                      value={teamChartFilter}
+                      onChange={event => {
+                        const team = event.target.value;
+                        setTeamChartFilter(team);
+                        loadTeamJiraCharts(team);
+                      }}
+                      disabled={teamChartsLoading}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    >
+                      <option value="All">All teams</option>
+                      {teamChartOptions.map(team => <option key={team} value={team}>{team}</option>)}
+                    </select>
+                  </label>
+                  <div className="text-xs text-gray-400">Charts refresh when team changes.</div>
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {teamCharts.charts.map(chart => (
+                    <div key={chart.id} className="bg-white border border-gray-200 rounded-lg p-3 min-h-[260px]">
+                      <div className="h-full" dangerouslySetInnerHTML={{ __html: chart.svg }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : !teamChartsLoading && (
+              <div className="bg-white border border-dashed border-gray-300 rounded-lg px-4 py-6 text-sm text-gray-500">No Python-generated Team JIRA diagrams loaded yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!teamJiraOpen && (
+        <>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-2">
@@ -363,6 +465,8 @@ export default function JiraDueDate() {
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
