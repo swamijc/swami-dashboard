@@ -220,13 +220,16 @@ async function handleTeamPage(_req: Request, res: Response) {
 
   try {
     const response = await axios.get(`${JIRA_BASE_URL}/wiki/rest/api/content/${TEAM_JIRA_PAGE_ID}`, {
-      params: { expand: 'body.storage,version,space' },
+      params: { expand: 'body.view,body.export_view,body.storage,version,space' },
       timeout: JIRA_TIMEOUT_MS,
       headers: {
         Authorization: authHeader(),
         Accept: 'application/json',
       },
     });
+
+    const body = response.data?.body || {};
+    const html = body.view?.value || body.export_view?.value || body.storage?.value || '';
 
     res.json({
       id: response.data?.id,
@@ -235,7 +238,8 @@ async function handleTeamPage(_req: Request, res: Response) {
       space: response.data?.space?.name || 'CDC',
       version: response.data?.version?.number || null,
       updated_at: response.data?.version?.when || null,
-      html: response.data?.body?.storage?.value || '',
+      html,
+      representation: body.view?.value ? 'view' : body.export_view?.value ? 'export_view' : 'storage',
       fetched_at: new Date().toISOString(),
     });
   } catch (error: any) {
