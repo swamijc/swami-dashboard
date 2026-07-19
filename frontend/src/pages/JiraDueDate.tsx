@@ -284,8 +284,8 @@ export default function JiraDueDate() {
         </div>
         <div className="flex gap-2">
           <Link to="/jira" className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition">JIRA Query</Link>
-          <Link to="/jira/due-date" className="px-4 py-2 rounded-lg bg-blue-700 text-sm font-medium text-white transition">JIRA Due Date</Link>
-          <button type="button" onClick={openTeamJira} disabled={teamChartsLoading} className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition disabled:opacity-50">{teamChartsLoading ? 'Loading...' : 'Team JIRA'}</button>
+          <Link to="/jira/due-date" className={`px-4 py-2 rounded-lg text-sm font-medium transition ${teamJiraOpen ? 'border border-gray-300 bg-white text-gray-700 hover:border-blue-500 hover:text-blue-700' : 'bg-blue-700 text-white'}`}>JIRA Due Date</Link>
+          <button type="button" onClick={openTeamJira} disabled={teamChartsLoading} className={`px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${teamJiraOpen ? 'bg-blue-700 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:border-blue-500 hover:text-blue-700'}`}>{teamChartsLoading ? 'Loading...' : 'Team JIRA'}</button>
         </div>
       </div>
 

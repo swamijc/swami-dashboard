@@ -255,7 +255,7 @@ export default function Jira() {
           <p className="text-sm text-gray-500">{teamPageOpen ? 'Team-level story points, issue mix, status, and overdue tracking from live JIRA data.' : 'Boots Mobile App open sprint Story/Bug visibility by resource and story points.'}</p>
         </div>
         <div className="flex gap-2">
-          <Link to="/jira" className="px-4 py-2 rounded-lg bg-blue-700 text-sm font-medium text-white transition">
+          <Link to="/jira" className={`px-4 py-2 rounded-lg text-sm font-medium transition ${teamPageOpen ? 'border border-gray-300 bg-white text-gray-700 hover:border-blue-500 hover:text-blue-700' : 'bg-blue-700 text-white'}`}>
             JIRA Query
           </Link>
           <Link to="/jira/due-date" className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition">
@@ -265,7 +265,7 @@ export default function Jira() {
             type="button"
             onClick={openTeamJira}
             disabled={teamChartsLoading}
-            className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition"
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${teamPageOpen ? 'bg-blue-700 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:border-blue-500 hover:text-blue-700'}`}
           >
             {teamChartsLoading ? 'Loading...' : 'Team JIRA'}
           </button>
