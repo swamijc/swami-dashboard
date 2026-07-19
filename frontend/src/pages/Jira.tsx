@@ -60,16 +60,6 @@ interface JiraReport {
   issues: JiraIssue[];
 }
 
-interface TeamJiraPage {
-  title: string;
-  source_url: string;
-  space: string;
-  version: number | null;
-  updated_at: string | null;
-  html: string;
-  fetched_at: string;
-}
-
 interface TeamJiraChart {
   id: string;
   title: string;
@@ -103,11 +93,9 @@ export default function Jira() {
   const [typeFilter, setTypeFilter] = useState<'All' | 'Story' | 'Bug' | 'Defect'>('All');
   const [selectedResource, setSelectedResource] = useState('');
   const [chartMode, setChartMode] = useState<'Story/Bug' | 'AOS/iOS' | 'Status'>('Story/Bug');
-  const [teamPage, setTeamPage] = useState<TeamJiraPage | null>(null);
   const [teamCharts, setTeamCharts] = useState<TeamJiraCharts | null>(null);
   const [teamChartFilter, setTeamChartFilter] = useState('All');
   const [teamPageOpen, setTeamPageOpen] = useState(false);
-  const [teamPageLoading, setTeamPageLoading] = useState(false);
   const [teamChartsLoading, setTeamChartsLoading] = useState(false);
   const issuesRef = useRef<HTMLDivElement | null>(null);
   const chartColors = ['#1d4ed8', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#475569'];
@@ -132,24 +120,6 @@ export default function Jira() {
     }
   };
 
-  const loadTeamJiraPage = async () => {
-    setTeamPageLoading(true);
-    setAlert('');
-    setError('');
-    try {
-      const response = await api.get('/jira/team-page');
-      setTeamPage(response.data);
-    } catch (err: any) {
-      if (err?.response?.data?.auth_required) {
-        setAlert(err.response.data.message || 'login to Boots JIRA using browser');
-      } else {
-        setError(err?.response?.data?.error || err.message || 'Failed to load Team JIRA page');
-      }
-    } finally {
-      setTeamPageLoading(false);
-    }
-  };
-
   const loadTeamJiraCharts = async (team = teamChartFilter) => {
     setTeamChartsLoading(true);
     setAlert('');
@@ -170,14 +140,11 @@ export default function Jira() {
 
   const openTeamJira = async () => {
     setTeamPageOpen(true);
-    await Promise.allSettled([
-      teamPage ? Promise.resolve() : loadTeamJiraPage(),
-      teamCharts ? Promise.resolve() : loadTeamJiraCharts(),
-    ]);
+    if (!teamCharts) await loadTeamJiraCharts();
   };
 
   const refreshTeamJira = async () => {
-    await Promise.allSettled([loadTeamJiraPage(), loadTeamJiraCharts()]);
+    await loadTeamJiraCharts();
   };
 
   useEffect(() => { loadReport(); }, []);
@@ -284,8 +251,8 @@ export default function Jira() {
     <div>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">JIRA Query</h1>
-          <p className="text-sm text-gray-500">Boots Mobile App open sprint Story/Bug visibility by resource and story points.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{teamPageOpen ? 'Story Point Tracker for All Team' : 'JIRA Query'}</h1>
+          <p className="text-sm text-gray-500">{teamPageOpen ? 'Team-level story points, issue mix, status, and overdue tracking from live JIRA data.' : 'Boots Mobile App open sprint Story/Bug visibility by resource and story points.'}</p>
         </div>
         <div className="flex gap-2">
           <Link to="/jira" className="px-4 py-2 rounded-lg bg-blue-700 text-sm font-medium text-white transition">
@@ -297,10 +264,10 @@ export default function Jira() {
           <button
             type="button"
             onClick={openTeamJira}
-            disabled={teamPageLoading}
+            disabled={teamChartsLoading}
             className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition"
           >
-            {teamPageLoading ? 'Loading...' : 'Team JIRA'}
+            {teamChartsLoading ? 'Loading...' : 'Team JIRA'}
           </button>
           <a
             href="https://bootsuk.atlassian.net/jira"
@@ -324,30 +291,17 @@ export default function Jira() {
         <div className="bg-white rounded-xl border border-gray-200 mb-5 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">{teamPage?.title || 'Story Point Tracker for All Team'}</h2>
-              <p className="text-xs text-gray-500 mt-1">
-                {teamPage?.space || 'CDC'}{teamPage?.version ? ` · v${teamPage.version}` : ''}{teamPage?.updated_at ? ` · updated ${teamPage.updated_at.slice(0, 10)}` : ''}
-              </p>
+              <h2 className="text-lg font-semibold text-gray-900">Story Point Tracker for All Team</h2>
             </div>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={refreshTeamJira}
-                disabled={teamPageLoading || teamChartsLoading}
+                disabled={teamChartsLoading}
                 className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition disabled:opacity-50"
               >
-                {teamPageLoading || teamChartsLoading ? 'Refreshing...' : 'Refresh'}
+                {teamChartsLoading ? 'Refreshing...' : 'Refresh'}
               </button>
-              {teamPage?.source_url && (
-                <a
-                  href={teamPage.source_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition"
-                >
-                  Open Original ↗
-                </a>
-              )}
               <button
                 type="button"
                 onClick={() => setTeamPageOpen(false)}
@@ -358,11 +312,11 @@ export default function Jira() {
             </div>
           </div>
           <div className="p-5 max-h-[72vh] overflow-auto bg-gray-50/50">
-            {(teamPageLoading || teamChartsLoading) && <div className="text-sm text-gray-500 mb-4">Loading Team JIRA diagrams...</div>}
+            {teamChartsLoading && <div className="text-sm text-gray-500 mb-4">Loading Story Point Tracker...</div>}
             {teamCharts?.charts?.length ? (
               <div className="mb-5">
                 <div className="flex flex-col gap-1 mb-3">
-                  <h3 className="text-sm font-semibold text-gray-900">Python generated diagrams</h3>
+                  <h3 className="text-sm font-semibold text-gray-900">Story Point Tracker for All Team</h3>
                   <p className="text-xs text-gray-500">
                     {teamCharts.selected_team && teamCharts.selected_team !== 'All' ? `${teamCharts.selected_team} · ` : ''}{teamCharts.total_issues} issues · {teamCharts.total_story_points} story points · generated from live JIRA data
                   </p>
@@ -403,6 +357,8 @@ export default function Jira() {
         </div>
       )}
 
+      {!teamPageOpen && (
+        <>
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-2">
           <div className="text-xs font-medium text-gray-500">JQL</div>
@@ -610,6 +566,8 @@ export default function Jira() {
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
