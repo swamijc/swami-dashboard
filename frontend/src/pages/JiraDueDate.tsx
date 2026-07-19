@@ -298,6 +298,7 @@ export default function JiraDueDate() {
             <h2 className="text-lg font-semibold text-gray-900">Story Point Tracker for All Team</h2>
             <div className="flex gap-2">
               <button type="button" onClick={refreshTeamJira} disabled={teamChartsLoading} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition disabled:opacity-50">{teamChartsLoading ? 'Refreshing...' : 'Refresh'}</button>
+              <a href="https://bootsuk.atlassian.net/wiki/spaces/cdc/pages/1443430401/Story+Point+Tracker+for+All+Team" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition">Open JIRA board</a>
               <button type="button" onClick={() => setTeamJiraOpen(false)} className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition">Close</button>
             </div>
           </div>

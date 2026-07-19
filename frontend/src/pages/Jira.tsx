@@ -302,6 +302,14 @@ export default function Jira() {
               >
                 {teamChartsLoading ? 'Refreshing...' : 'Refresh'}
               </button>
+              <a
+                href="https://bootsuk.atlassian.net/wiki/spaces/cdc/pages/1443430401/Story+Point+Tracker+for+All+Team"
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition"
+              >
+                Open JIRA board
+              </a>
               <button
                 type="button"
                 onClick={() => setTeamPageOpen(false)}
