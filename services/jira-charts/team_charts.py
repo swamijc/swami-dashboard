@@ -2,6 +2,7 @@
 import html
 import json
 import math
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import date
@@ -9,6 +10,7 @@ from datetime import date
 
 PALETTE = ["#005eb8", "#0f766e", "#f59e0b", "#dc2626", "#7c3aed", "#475569", "#0891b2"]
 DONE_STATUSES = {"done", "closed", "resolved", "complete", "completed", "released"}
+NON_PERSON_LABELS = {"aos", "ios", "android", "uk", "roi"}
 
 
 def esc(value):
@@ -105,6 +107,20 @@ def is_overdue(issue):
         return False
 
 
+def person_from_labels(labels):
+    for label in labels or []:
+        value = str(label or "").strip()
+        normalized = value.lower()
+        if not value or normalized in NON_PERSON_LABELS:
+            continue
+        if re.fullmatch(r"pi\d+", normalized):
+            continue
+        if re.search(r"[\d_]", value):
+            continue
+        return value
+    return "Unknown User"
+
+
 def main():
     payload = json.load(sys.stdin)
     report = payload.get("report") or payload
@@ -122,7 +138,7 @@ def main():
     for issue in issues:
         story_points = float(issue.get("story_points") or 0)
         team_points[issue.get("team") or "Unassigned"] += float(issue.get("story_points") or 0)
-        assignee_points[issue.get("assignee") or "Unassigned"] += story_points
+        assignee_points[person_from_labels(issue.get("labels") or [])] += story_points
         if is_overdue(issue):
             assignee = issue.get("assignee") or "Unassigned"
             assignee_overdue[assignee] += 1
@@ -167,7 +183,7 @@ def main():
                 "Story Points Based On Assignee",
                 sorted(assignee_points.items(), key=lambda item: (-item[1], item[0])),
                 " pts",
-                f'Chart By: Assignee · Sum: Story Points · Total: {report.get("total_story_points", 0)}',
+                f'Chart By: Labels · Sum: Story Points · Total: {report.get("total_story_points", 0)}',
             ),
         },
     ]
