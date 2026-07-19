@@ -52,10 +52,11 @@ export function createApp() {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      // secure=true when behind HTTPS proxy (cloudflared) or in production
-      secure: process.env.NODE_ENV === 'production' || !!process.env.EXTRA_ORIGINS,
+      // Keep secure:false in dev — browsers allow non-secure cookies on both
+      // HTTP (localhost) and HTTPS (tunnel). Only force secure in production.
+      secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
-      sameSite: process.env.EXTRA_ORIGINS ? 'none' : 'lax',
+      sameSite: 'lax',   // lax works for both localhost and same-origin tunnel
       maxAge: 8 * 60 * 60 * 1000  // 8 hours
     }
   }));
