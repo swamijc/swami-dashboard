@@ -70,6 +70,21 @@ interface TeamJiraPage {
   fetched_at: string;
 }
 
+interface TeamJiraChart {
+  id: string;
+  title: string;
+  svg: string;
+}
+
+interface TeamJiraCharts {
+  source: string;
+  generated_at: string;
+  fetched_at: string;
+  total_issues: number;
+  total_story_points: number;
+  charts: TeamJiraChart[];
+}
+
 function sanitizeConfluenceHtml(html: string) {
   const doc = new DOMParser().parseFromString(html || '', 'text/html');
   doc.querySelectorAll('script, style, iframe, object, embed, link, meta').forEach(node => node.remove());
@@ -104,8 +119,10 @@ export default function Jira() {
   const [selectedResource, setSelectedResource] = useState('');
   const [chartMode, setChartMode] = useState<'Story/Bug' | 'AOS/iOS' | 'Status'>('Story/Bug');
   const [teamPage, setTeamPage] = useState<TeamJiraPage | null>(null);
+  const [teamCharts, setTeamCharts] = useState<TeamJiraCharts | null>(null);
   const [teamPageOpen, setTeamPageOpen] = useState(false);
   const [teamPageLoading, setTeamPageLoading] = useState(false);
+  const [teamChartsLoading, setTeamChartsLoading] = useState(false);
   const issuesRef = useRef<HTMLDivElement | null>(null);
   const chartColors = ['#1d4ed8', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#475569'];
 
@@ -141,16 +158,39 @@ export default function Jira() {
       } else {
         setError(err?.response?.data?.error || err.message || 'Failed to load Team JIRA page');
       }
-      setTeamPageOpen(false);
     } finally {
       setTeamPageLoading(false);
     }
   };
 
+  const loadTeamJiraCharts = async () => {
+    setTeamChartsLoading(true);
+    setAlert('');
+    setError('');
+    try {
+      const response = await api.post('/jira/team-charts', isViewer ? {} : { jql });
+      setTeamCharts(response.data);
+    } catch (err: any) {
+      if (err?.response?.data?.auth_required) {
+        setAlert(err.response.data.message || 'login to Boots JIRA using browser');
+      } else {
+        setError(err?.response?.data?.error || err.message || 'Failed to generate Team JIRA diagrams');
+      }
+    } finally {
+      setTeamChartsLoading(false);
+    }
+  };
+
   const openTeamJira = async () => {
     setTeamPageOpen(true);
-    if (teamPage) return;
-    await loadTeamJiraPage();
+    await Promise.allSettled([
+      teamPage ? Promise.resolve() : loadTeamJiraPage(),
+      teamCharts ? Promise.resolve() : loadTeamJiraCharts(),
+    ]);
+  };
+
+  const refreshTeamJira = async () => {
+    await Promise.allSettled([loadTeamJiraPage(), loadTeamJiraCharts()]);
   };
 
   useEffect(() => { loadReport(); }, []);
@@ -305,11 +345,11 @@ export default function Jira() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={loadTeamJiraPage}
-                disabled={teamPageLoading}
+                onClick={refreshTeamJira}
+                disabled={teamPageLoading || teamChartsLoading}
                 className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition disabled:opacity-50"
               >
-                {teamPageLoading ? 'Refreshing...' : 'Refresh'}
+                {teamPageLoading || teamChartsLoading ? 'Refreshing...' : 'Refresh'}
               </button>
               {teamPage?.source_url && (
                 <a
@@ -331,7 +371,28 @@ export default function Jira() {
             </div>
           </div>
           <div className="p-5 max-h-[72vh] overflow-auto bg-gray-50/50">
-            {teamPageLoading && <div className="text-sm text-gray-500">Loading Team JIRA page...</div>}
+            {(teamPageLoading || teamChartsLoading) && <div className="text-sm text-gray-500 mb-4">Loading Team JIRA diagrams...</div>}
+            {teamCharts?.charts?.length ? (
+              <div className="mb-5">
+                <div className="flex flex-col gap-1 mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900">Python generated diagrams</h3>
+                  <p className="text-xs text-gray-500">
+                    {teamCharts.total_issues} issues · {teamCharts.total_story_points} story points · generated from live JIRA data
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {teamCharts.charts.map(chart => (
+                    <div key={chart.id} className="bg-white border border-gray-200 rounded-lg p-3 min-h-[260px]">
+                      <div className="h-full" dangerouslySetInnerHTML={{ __html: chart.svg }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : !teamChartsLoading && (
+              <div className="bg-white border border-dashed border-gray-300 rounded-lg px-4 py-6 text-sm text-gray-500 mb-4">
+                No Python-generated Team JIRA diagrams loaded yet.
+              </div>
+            )}
             {teamPageNeedsExport && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-4">
                 <div className="font-semibold mb-1">Custom Charts export images are not generated for this Confluence page.</div>

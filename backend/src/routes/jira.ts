@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import axios from 'axios';
+import path from 'path';
+import { spawn } from 'child_process';
 import { requireAuth } from '../middleware/auth';
 
 const router = Router();
@@ -15,6 +17,36 @@ const STORY_POINTS_FIELD = process.env.JIRA_STORY_POINTS_FIELD || 'customfield_1
 const TEAM_FIELD = process.env.JIRA_TEAM_FIELD || 'customfield_10001';
 const READY_FOR_PROGRESSIVE_SIT_FIELD = process.env.JIRA_READY_FOR_PROGRESSIVE_SIT_FIELD || 'customfield_13392';
 const SPRINT_FIELD = process.env.JIRA_SPRINT_FIELD || 'customfield_10020';
+
+function chartScriptPath(): string {
+  return process.env.JIRA_CHART_SCRIPT || path.resolve(__dirname, '../../../services/jira-charts/team_charts.py');
+}
+
+function runPythonCharts(report: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('python3', [chartScriptPath()], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', chunk => { stdout += chunk.toString(); });
+    child.stderr.on('data', chunk => { stderr += chunk.toString(); });
+    child.on('error', reject);
+    child.on('close', code => {
+      if (code !== 0) {
+        reject(new Error(stderr || `Python chart generator exited with ${code}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (error: any) {
+        reject(new Error(`Failed to parse Python chart output: ${error.message}`));
+      }
+    });
+
+    child.stdin.write(JSON.stringify({ report }));
+    child.stdin.end();
+  });
+}
 
 function authHeader(): string {
   return `Basic ${Buffer.from(`${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`;
@@ -258,8 +290,46 @@ async function handleTeamPage(_req: Request, res: Response) {
   }
 }
 
+async function handleTeamCharts(req: Request, res: Response) {
+  if (!JIRA_API_TOKEN) {
+    res.status(428).json({
+      auth_required: true,
+      message: 'login to Boots JIRA using browser',
+    });
+    return;
+  }
+
+  try {
+    const isViewer = (req.session as any).role === 'viewer';
+    const requestedJql = !isViewer && typeof req.body?.jql === 'string' ? req.body.jql.trim() : '';
+    const report = await buildReport(requestedJql || DEFAULT_JIRA_JQL);
+    const charts = await runPythonCharts(report);
+    res.json({
+      ...charts,
+      jql: report.jql,
+      fetched_at: report.fetched_at,
+      total_issues: report.total_issues,
+      total_story_points: report.total_story_points,
+    });
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status === 401 || status === 403) {
+      res.status(status).json({
+        auth_required: true,
+        message: 'login to Boots JIRA using browser',
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: error?.response?.data?.errorMessages?.join(', ') || error?.response?.data?.message || error.message || 'Failed to generate Team JIRA charts',
+    });
+  }
+}
+
 router.get('/report', requireAuth, handleReport);
 router.post('/report', requireAuth, handleReport);
 router.get('/team-page', requireAuth, handleTeamPage);
+router.post('/team-charts', requireAuth, handleTeamCharts);
 
 export default router;
