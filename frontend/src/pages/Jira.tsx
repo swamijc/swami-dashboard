@@ -87,23 +87,6 @@ interface TeamJiraCharts {
   charts: TeamJiraChart[];
 }
 
-function sanitizeConfluenceHtml(html: string) {
-  const doc = new DOMParser().parseFromString(html || '', 'text/html');
-  doc.querySelectorAll('script, style, iframe, object, embed, link, meta').forEach(node => node.remove());
-  doc.body.querySelectorAll('*').forEach(element => {
-    [...element.attributes].forEach(attr => {
-      const name = attr.name.toLowerCase();
-      const value = attr.value.trim().toLowerCase();
-      if (name.startsWith('on') || value.startsWith('javascript:')) element.removeAttribute(attr.name);
-    });
-  });
-  return doc.body.innerHTML;
-}
-
-function needsCustomChartsExport(html?: string) {
-  return /Exporting Custom Jira Charts on Confluence Cloud requires User Impersonation/i.test(html || '');
-}
-
 export default function Jira() {
   const { user } = useAuth();
   const isViewer = user?.role === 'viewer';
@@ -287,7 +270,6 @@ export default function Jira() {
 
   const teams = useMemo(() => [...new Set((report?.issues || []).map(issue => issue.team))].sort(), [report]);
   const statuses = useMemo(() => [...new Set((report?.issues || []).map(issue => issue.status))].sort(), [report]);
-  const teamPageNeedsExport = needsCustomChartsExport(teamPage?.html);
   const teamChartOptions = useMemo(() => teamCharts?.available_teams?.length ? teamCharts.available_teams : teams, [teamCharts, teams]);
 
   const selectResource = (resource: JiraResource) => {
@@ -416,20 +398,6 @@ export default function Jira() {
               <div className="bg-white border border-dashed border-gray-300 rounded-lg px-4 py-6 text-sm text-gray-500 mb-4">
                 No Python-generated Team JIRA diagrams loaded yet.
               </div>
-            )}
-            {teamPageNeedsExport && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-4">
-                <div className="font-semibold mb-1">Custom Charts export images are not generated for this Confluence page.</div>
-                <div>
-                  Confluence is returning the Custom Charts placeholder instead of the chart image. Open the original page as <strong>swami.k@ext.boots.com</strong>, use <strong>More actions → Generate Custom Charts export images</strong>, publish/save if prompted, then click <strong>Refresh</strong> here.
-                </div>
-              </div>
-            )}
-            {teamPage?.html && (
-              <div
-                className="confluence-content bg-white border border-gray-200 rounded-lg p-5"
-                dangerouslySetInnerHTML={{ __html: sanitizeConfluenceHtml(teamPage.html) }}
-              />
             )}
           </div>
         </div>
