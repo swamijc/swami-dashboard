@@ -113,6 +113,7 @@ def main():
 
     type_counts = Counter(issue_type(issue) for issue in issues)
     status_counts = Counter((issue.get("status") or "Unknown") for issue in issues)
+    team_issue_counts = Counter((issue.get("team") or "Unassigned") for issue in issues)
 
     team_points = defaultdict(float)
     assignee_overdue = Counter()
@@ -130,6 +131,11 @@ def main():
             "id": "issue_mix",
             "title": "Story / Bug / Defect Mix",
             "svg": donut_chart("Story / Bug / Defect Mix", [("Stories", type_counts.get("Story", 0)), ("Bugs", type_counts.get("Bug", 0)), ("Defects", type_counts.get("Defect", 0))], subtitle),
+        },
+        {
+            "id": "team_issue_mix",
+            "title": "Issue Distribution by Team",
+            "svg": donut_chart("Issue Distribution by Team", team_issue_counts.most_common(7), subtitle),
         },
         {
             "id": "status_distribution",
