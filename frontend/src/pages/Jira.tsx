@@ -83,6 +83,10 @@ function sanitizeConfluenceHtml(html: string) {
   return doc.body.innerHTML;
 }
 
+function needsCustomChartsExport(html?: string) {
+  return /Exporting Custom Jira Charts on Confluence Cloud requires User Impersonation/i.test(html || '');
+}
+
 export default function Jira() {
   const { user } = useAuth();
   const isViewer = user?.role === 'viewer';
@@ -124,9 +128,7 @@ export default function Jira() {
     }
   };
 
-  const openTeamJira = async () => {
-    setTeamPageOpen(true);
-    if (teamPage) return;
+  const loadTeamJiraPage = async () => {
     setTeamPageLoading(true);
     setAlert('');
     setError('');
@@ -143,6 +145,12 @@ export default function Jira() {
     } finally {
       setTeamPageLoading(false);
     }
+  };
+
+  const openTeamJira = async () => {
+    setTeamPageOpen(true);
+    if (teamPage) return;
+    await loadTeamJiraPage();
   };
 
   useEffect(() => { loadReport(); }, []);
@@ -235,6 +243,7 @@ export default function Jira() {
 
   const teams = useMemo(() => [...new Set((report?.issues || []).map(issue => issue.team))].sort(), [report]);
   const statuses = useMemo(() => [...new Set((report?.issues || []).map(issue => issue.status))].sort(), [report]);
+  const teamPageNeedsExport = needsCustomChartsExport(teamPage?.html);
 
   const selectResource = (resource: JiraResource) => {
     setSelectedResource(resource.assignee);
@@ -294,6 +303,14 @@ export default function Jira() {
               </p>
             </div>
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={loadTeamJiraPage}
+                disabled={teamPageLoading}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition disabled:opacity-50"
+              >
+                {teamPageLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
               {teamPage?.source_url && (
                 <a
                   href={teamPage.source_url}
@@ -315,6 +332,14 @@ export default function Jira() {
           </div>
           <div className="p-5 max-h-[72vh] overflow-auto bg-gray-50/50">
             {teamPageLoading && <div className="text-sm text-gray-500">Loading Team JIRA page...</div>}
+            {teamPageNeedsExport && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-4">
+                <div className="font-semibold mb-1">Custom Charts export images are not generated for this Confluence page.</div>
+                <div>
+                  Confluence is returning the Custom Charts placeholder instead of the chart image. Open the original page as <strong>swami.k@ext.boots.com</strong>, use <strong>More actions → Generate Custom Charts export images</strong>, publish/save if prompted, then click <strong>Refresh</strong> here.
+                </div>
+              </div>
+            )}
             {teamPage?.html && (
               <div
                 className="confluence-content bg-white border border-gray-200 rounded-lg p-5"
