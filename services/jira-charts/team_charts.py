@@ -49,8 +49,11 @@ def donut_chart(title_text, counts, subtitle=None, center_label="issues"):
         x2, y2 = cx + radius * math.cos(end), cy + radius * math.sin(end)
         large = 1 if angle > math.pi else 0
         color = PALETTE[idx % len(PALETTE)]
+        pct = round(value / total * 100)
         pieces.append(
-            f'<path d="M {cx} {cy} L {x1:.2f} {y1:.2f} A {radius} {radius} 0 {large} 1 {x2:.2f} {y2:.2f} Z" fill="{color}"/>'
+            f'<path d="M {cx} {cy} L {x1:.2f} {y1:.2f} A {radius} {radius} 0 {large} 1 {x2:.2f} {y2:.2f} Z" fill="{color}">'
+            f'<title>{esc(name)}: {value:g} {esc(center_label)} ({pct}%)</title>'
+            f'</path>'
         )
         start = end
 
