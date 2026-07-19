@@ -10,6 +10,7 @@ import Admin from './pages/Admin';
 import Onboarding from './pages/Onboarding';
 import Jira from './pages/Jira';
 import JiraDueDate from './pages/JiraDueDate';
+import WorldCup from './pages/WorldCup';
 import Quality from './pages/Quality';
 import Release from './pages/Release';
 
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/tracking" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
           <Route path="/jira" element={<ProtectedRoute><Jira /></ProtectedRoute>} />
           <Route path="/jira/due-date" element={<ProtectedRoute><JiraDueDate /></ProtectedRoute>} />
+          <Route path="/world-cup" element={<ProtectedRoute><WorldCup /></ProtectedRoute>} />
           <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/onboarding/*" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/quality" element={<ProtectedRoute><Quality /></ProtectedRoute>} />
