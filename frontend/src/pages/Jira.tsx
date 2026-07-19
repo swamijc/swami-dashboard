@@ -60,6 +60,29 @@ interface JiraReport {
   issues: JiraIssue[];
 }
 
+interface TeamJiraPage {
+  title: string;
+  source_url: string;
+  space: string;
+  version: number | null;
+  updated_at: string | null;
+  html: string;
+  fetched_at: string;
+}
+
+function sanitizeConfluenceHtml(html: string) {
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  doc.querySelectorAll('script, style, iframe, object, embed, link, meta').forEach(node => node.remove());
+  doc.body.querySelectorAll('*').forEach(element => {
+    [...element.attributes].forEach(attr => {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim().toLowerCase();
+      if (name.startsWith('on') || value.startsWith('javascript:')) element.removeAttribute(attr.name);
+    });
+  });
+  return doc.body.innerHTML;
+}
+
 export default function Jira() {
   const { user } = useAuth();
   const isViewer = user?.role === 'viewer';
@@ -76,6 +99,9 @@ export default function Jira() {
   const [typeFilter, setTypeFilter] = useState<'All' | 'Story' | 'Bug' | 'Defect'>('All');
   const [selectedResource, setSelectedResource] = useState('');
   const [chartMode, setChartMode] = useState<'Story/Bug' | 'AOS/iOS' | 'Status'>('Story/Bug');
+  const [teamPage, setTeamPage] = useState<TeamJiraPage | null>(null);
+  const [teamPageOpen, setTeamPageOpen] = useState(false);
+  const [teamPageLoading, setTeamPageLoading] = useState(false);
   const issuesRef = useRef<HTMLDivElement | null>(null);
   const chartColors = ['#1d4ed8', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#475569'];
 
@@ -95,6 +121,27 @@ export default function Jira() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openTeamJira = async () => {
+    setTeamPageOpen(true);
+    if (teamPage) return;
+    setTeamPageLoading(true);
+    setAlert('');
+    setError('');
+    try {
+      const response = await api.get('/jira/team-page');
+      setTeamPage(response.data);
+    } catch (err: any) {
+      if (err?.response?.data?.auth_required) {
+        setAlert(err.response.data.message || 'login to Boots JIRA using browser');
+      } else {
+        setError(err?.response?.data?.error || err.message || 'Failed to load Team JIRA page');
+      }
+      setTeamPageOpen(false);
+    } finally {
+      setTeamPageLoading(false);
     }
   };
 
@@ -211,14 +258,14 @@ export default function Jira() {
           <Link to="/jira/due-date" className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition">
             JIRA Due Date
           </Link>
-          <a
-            href="https://bootsuk.atlassian.net/wiki/spaces/cdc/pages/1443430401/Story+Point+Tracker+for+All+Team"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={openTeamJira}
+            disabled={teamPageLoading}
             className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition"
           >
-            Team JIRA ↗
-          </a>
+            {teamPageLoading ? 'Loading...' : 'Team JIRA'}
+          </button>
           <a
             href="https://bootsuk.atlassian.net/jira"
             target="_blank"
@@ -236,6 +283,47 @@ export default function Jira() {
         </div>
       )}
       {error && <div className="bg-red-100 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-5 text-sm">{error}</div>}
+
+      {teamPageOpen && (
+        <div className="bg-white rounded-xl border border-gray-200 mb-5 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">{teamPage?.title || 'Story Point Tracker for All Team'}</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                {teamPage?.space || 'CDC'}{teamPage?.version ? ` · v${teamPage.version}` : ''}{teamPage?.updated_at ? ` · updated ${teamPage.updated_at.slice(0, 10)}` : ''}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {teamPage?.source_url && (
+                <a
+                  href={teamPage.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition"
+                >
+                  Open Original ↗
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setTeamPageOpen(false)}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:border-blue-500 hover:text-blue-700 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          <div className="p-5 max-h-[72vh] overflow-auto bg-gray-50/50">
+            {teamPageLoading && <div className="text-sm text-gray-500">Loading Team JIRA page...</div>}
+            {teamPage?.html && (
+              <div
+                className="confluence-content bg-white border border-gray-200 rounded-lg p-5"
+                dangerouslySetInnerHTML={{ __html: sanitizeConfluenceHtml(teamPage.html) }}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-2">

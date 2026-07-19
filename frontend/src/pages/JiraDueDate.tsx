@@ -16,6 +16,7 @@ interface JiraIssue {
   due_date: string | null;
   sprint: string;
   sprint_start_date: string | null;
+  labels: string[];
   story_points: number;
 }
 

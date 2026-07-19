@@ -8,6 +8,7 @@ const JIRA_BASE_URL = process.env.JIRA_BASE_URL || 'https://bootsuk.atlassian.ne
 const JIRA_USER_EMAIL = process.env.JIRA_USER_EMAIL || 'swami.k@ext.boots.com';
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN_ID || '';
 const JIRA_TIMEOUT_MS = Number(process.env.JIRA_TIMEOUT_MS || 30000);
+const TEAM_JIRA_PAGE_ID = process.env.TEAM_JIRA_PAGE_ID || '1443430401';
 
 const DEFAULT_JIRA_JQL = `project = "Mobile App " AND "Team[Team]" in (5af5b4ff-5e77-47ba-869d-ceb6207cb297,6e469218-134d-486f-9d5b-0b0f34d16734) AND Sprint in openSprints() AND worktype in (Story, Bug)`;
 const STORY_POINTS_FIELD = process.env.JIRA_STORY_POINTS_FIELD || 'customfield_10016';
@@ -208,7 +209,53 @@ async function handleReport(req: Request, res: Response) {
   }
 }
 
+async function handleTeamPage(_req: Request, res: Response) {
+  if (!JIRA_API_TOKEN) {
+    res.status(428).json({
+      auth_required: true,
+      message: 'login to Boots JIRA using browser',
+    });
+    return;
+  }
+
+  try {
+    const response = await axios.get(`${JIRA_BASE_URL}/wiki/rest/api/content/${TEAM_JIRA_PAGE_ID}`, {
+      params: { expand: 'body.storage,version,space' },
+      timeout: JIRA_TIMEOUT_MS,
+      headers: {
+        Authorization: authHeader(),
+        Accept: 'application/json',
+      },
+    });
+
+    res.json({
+      id: response.data?.id,
+      title: response.data?.title || 'Story Point Tracker for All Team',
+      source_url: `${JIRA_BASE_URL}/wiki/spaces/cdc/pages/${TEAM_JIRA_PAGE_ID}/Story+Point+Tracker+for+All+Team`,
+      space: response.data?.space?.name || 'CDC',
+      version: response.data?.version?.number || null,
+      updated_at: response.data?.version?.when || null,
+      html: response.data?.body?.storage?.value || '',
+      fetched_at: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status === 401 || status === 403) {
+      res.status(status).json({
+        auth_required: true,
+        message: 'login to Boots JIRA using browser',
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: error?.response?.data?.message || error.message || 'Failed to load Team JIRA page',
+    });
+  }
+}
+
 router.get('/report', requireAuth, handleReport);
 router.post('/report', requireAuth, handleReport);
+router.get('/team-page', requireAuth, handleTeamPage);
 
 export default router;
