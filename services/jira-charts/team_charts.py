@@ -116,10 +116,13 @@ def main():
     team_issue_counts = Counter((issue.get("team") or "Unassigned") for issue in issues)
 
     team_points = defaultdict(float)
+    assignee_points = defaultdict(float)
     assignee_overdue = Counter()
     assignee_overdue_stories = Counter()
     for issue in issues:
+        story_points = float(issue.get("story_points") or 0)
         team_points[issue.get("team") or "Unassigned"] += float(issue.get("story_points") or 0)
+        assignee_points[issue.get("assignee") or "Unassigned"] += story_points
         if is_overdue(issue):
             assignee = issue.get("assignee") or "Unassigned"
             assignee_overdue[assignee] += 1
@@ -156,6 +159,16 @@ def main():
             "id": "overdue_story_assignee",
             "title": "Overdue Story Based On Assignee",
             "svg": bar_chart("Overdue Story Based On Assignee", assignee_overdue_stories.most_common(10), "", "Stories only"),
+        },
+        {
+            "id": "assignee_story_points",
+            "title": "Story Points Based On Assignee",
+            "svg": bar_chart(
+                "Story Points Based On Assignee",
+                sorted(assignee_points.items(), key=lambda item: (-item[1], item[0])),
+                " pts",
+                f'Chart By: Assignee · Sum: Story Points · Total: {report.get("total_story_points", 0)}',
+            ),
         },
     ]
 
