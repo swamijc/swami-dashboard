@@ -31,7 +31,7 @@ def title(text, subtitle=None):
     return f'<text x="24" y="28" font-size="17" font-weight="700" fill="#0f172a">{esc(text)}</text>{subtitle_svg}'
 
 
-def donut_chart(title_text, counts, subtitle=None):
+def donut_chart(title_text, counts, subtitle=None, center_label="issues"):
     counts = [(name, value) for name, value in counts if value > 0]
     width, height = 520, 300
     if not counts:
@@ -55,8 +55,8 @@ def donut_chart(title_text, counts, subtitle=None):
         start = end
 
     pieces.append(f'<circle cx="{cx}" cy="{cy}" r="44" fill="#ffffff"/>')
-    pieces.append(f'<text x="{cx}" y="{cy - 3}" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">{total}</text>')
-    pieces.append(f'<text x="{cx}" y="{cy + 17}" text-anchor="middle" font-size="11" fill="#64748b">issues</text>')
+    pieces.append(f'<text x="{cx}" y="{cy - 3}" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">{total:g}</text>')
+    pieces.append(f'<text x="{cx}" y="{cy + 17}" text-anchor="middle" font-size="11" fill="#64748b">{esc(center_label)}</text>')
 
     legend_x, legend_y = 290, 92
     for idx, (name, value) in enumerate(counts):
@@ -164,7 +164,7 @@ def main():
         {
             "id": "team_story_points",
             "title": "Story Points by Team",
-            "svg": bar_chart("Story Points by Team", sorted(team_points.items(), key=lambda item: (-item[1], item[0])), " pts", subtitle),
+            "svg": donut_chart("Story Points by Team", sorted(team_points.items(), key=lambda item: (-item[1], item[0])), subtitle, "story points"),
         },
         {
             "id": "overdue_assignee",
