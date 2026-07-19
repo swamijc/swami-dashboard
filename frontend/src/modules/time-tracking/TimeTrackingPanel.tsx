@@ -33,10 +33,11 @@ export default function TimeTrackingPanel() {
   const { user } = useAuth();
   const isViewer = user?.role === 'viewer';
   const CACHE_KEY = 'swami-time-tracking-report';
-  const [report, setReport] = useState<any>(() => {
-    try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; }
-  });
-  const [usingCache, setUsingCache] = useState(false);
+  const cachedReport = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } })();
+  const [report, setReport] = useState<any>(cachedReport);
+  // If we already have cached data on mount, show the amber banner immediately
+  // (it clears only when a fresh fetch succeeds)
+  const [usingCache, setUsingCache] = useState<boolean>(!!cachedReport);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState('');
   const [sessionSet, setSessionSet] = useState<boolean | null>(null);
@@ -44,24 +45,25 @@ export default function TimeTrackingPanel() {
   const week = getWeekRange(selectedMonday);
 
   const fetchReport = useCallback(async () => {
-    setLoading(true); setError(''); setUsingCache(false);
+    setLoading(true); setError('');
     try {
       const r = await api.post('/tracking/report', {
         from_date: week.from,
         to_date:   week.to,
       });
       setReport(r.data);
-      // Cache the successful result so it shows even after session expires
+      setUsingCache(false);  // fresh data — clear the stale-cache banner
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(r.data)); } catch { /* ignore */ }
     } catch (e: any) {
       const msg = e?.response?.data?.error || e.message || 'Failed to fetch report';
-      // Session expired — show cached data if available
+      // Session expired — always fall back to cache, never show an error if we have data
       const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } })();
       if (cached) {
         setReport(cached);
         setUsingCache(true);
         setError('');
       } else {
+        setUsingCache(false);
         setError(msg);
       }
     } finally {
@@ -149,9 +151,17 @@ export default function TimeTrackingPanel() {
       </div>
 
       {usingCache && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-4 flex items-center gap-2">
-          <span>⚠</span>
-          <span>Showing cached data — session expired. Open <a href="https://photontrack.photon.com/photontrack/#/manager" target="_blank" rel="noreferrer" className="underline font-medium">photontrack.photon.com</a> in Chrome to refresh automatically.</span>
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm mb-4 flex items-start gap-2">
+          <span className="mt-0.5">⚠</span>
+          <span>
+            <strong>Showing last saved data</strong> — Photon Track session not active.
+            {report?.meta?.from && <span className="ml-1 text-amber-600">(cached from {report.meta.from} to {report.meta.to})</span>}
+            <span className="ml-1">Open </span>
+            <a href="https://photontrack.photon.com/photontrack/#/manager" target="_blank" rel="noreferrer" className="underline font-medium">photontrack.photon.com</a>
+            <span> in Chrome to refresh automatically, or use the </span>
+            <strong>↻ Refresh Report</strong>
+            <span> button once your session is active.</span>
+          </span>
         </div>
       )}
 
