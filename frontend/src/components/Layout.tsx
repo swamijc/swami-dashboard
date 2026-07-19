@@ -9,7 +9,6 @@ const navItems = [
   { path: '/tracking',   label: 'Time Tracking', icon: '📈' },
   { path: '/revenue',    label: 'Revenue',    icon: '💰', disabled: true },
   { path: '/jira',       label: 'JIRA',       icon: '🔀' },
-  { path: '/world-cup',  label: 'World Cup Live', icon: '🏆' },
   { path: '/onboarding', label: 'Onboarding', icon: '👥' },
   { path: '/quality',    label: 'Quality',    icon: '🛡️' },
   { path: '/release',    label: 'Release',    icon: '🚀' },
@@ -47,7 +46,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <nav className="flex-1 py-4 space-y-1 px-3">
           {navItems.map(item => {
             if (item.adminOnly && user?.role !== 'admin') return null;
-            if (user?.role === 'viewer' && !['/', '/tracking', '/jira', '/world-cup', '/onboarding', '/quality', '/release'].includes(item.path)) return null;
+            if (user?.role === 'viewer' && !['/', '/tracking', '/jira', '/onboarding', '/quality', '/release'].includes(item.path)) return null;
             const active = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             return (
               <Link

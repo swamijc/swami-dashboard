@@ -6,7 +6,6 @@ const modules = [
   { title: 'Time Tracking', icon: '📈', path: '/tracking', desc: 'Team in/out hours — 40hr / 40-50hr / 50+ hr weekly analysis', active: true },
   { title: 'Revenue Report', icon: '💰', path: '/revenue', desc: 'Revenue vs target, variance and team contribution reports', active: false },
   { title: 'JIRA Dashboard', icon: '🔀', path: '/jira', desc: 'Boots Mobile App open sprint Story/Bug report by resource and story points', active: true },
-  { title: 'World Cup Live', icon: '🏆', path: '/world-cup', desc: 'Official FIFA World Cup final match links and legal streaming access', active: true },
   { title: 'Onboarding', icon: '👥', path: '/onboarding', desc: 'Photon and Boots onboarding/offboarding workflow tracking', active: true },
   { title: 'Code Quality', icon: '🛡️', path: '/quality', desc: 'Build, coverage, regression, load, and security test results', active: true },
   { title: 'Release Tracking', icon: '🚀', path: '/release', desc: 'DEV, QA, and PROD promotion status with manual approval tracking', active: true },
@@ -15,7 +14,7 @@ const modules = [
 export default function Home() {
   const { user } = useAuth();
   const visibleModules = user?.role === 'viewer'
-    ? modules.filter(module => ['/', '/tracking', '/jira', '/world-cup', '/onboarding', '/quality', '/release'].includes(module.path))
+    ? modules.filter(module => ['/', '/tracking', '/jira', '/onboarding', '/quality', '/release'].includes(module.path))
     : modules;
 
   return (
