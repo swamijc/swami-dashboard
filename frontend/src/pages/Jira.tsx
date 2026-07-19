@@ -80,6 +80,8 @@ interface TeamJiraCharts {
   source: string;
   generated_at: string;
   fetched_at: string;
+  selected_team: string;
+  available_teams: string[];
   total_issues: number;
   total_story_points: number;
   charts: TeamJiraChart[];
@@ -120,6 +122,7 @@ export default function Jira() {
   const [chartMode, setChartMode] = useState<'Story/Bug' | 'AOS/iOS' | 'Status'>('Story/Bug');
   const [teamPage, setTeamPage] = useState<TeamJiraPage | null>(null);
   const [teamCharts, setTeamCharts] = useState<TeamJiraCharts | null>(null);
+  const [teamChartFilter, setTeamChartFilter] = useState('All');
   const [teamPageOpen, setTeamPageOpen] = useState(false);
   const [teamPageLoading, setTeamPageLoading] = useState(false);
   const [teamChartsLoading, setTeamChartsLoading] = useState(false);
@@ -134,6 +137,7 @@ export default function Jira() {
       const response = await api.post('/jira/report', isViewer ? {} : { jql });
       setReport(response.data);
       setJql(response.data.jql || jql);
+      setTeamCharts(null);
     } catch (err: any) {
       if (err?.response?.data?.auth_required) {
         setAlert(err.response.data.message || 'login to Boots JIRA using browser');
@@ -163,12 +167,12 @@ export default function Jira() {
     }
   };
 
-  const loadTeamJiraCharts = async () => {
+  const loadTeamJiraCharts = async (team = teamChartFilter) => {
     setTeamChartsLoading(true);
     setAlert('');
     setError('');
     try {
-      const response = await api.post('/jira/team-charts', isViewer ? {} : { jql });
+      const response = await api.post('/jira/team-charts', isViewer ? { team } : { jql, team });
       setTeamCharts(response.data);
     } catch (err: any) {
       if (err?.response?.data?.auth_required) {
@@ -284,6 +288,7 @@ export default function Jira() {
   const teams = useMemo(() => [...new Set((report?.issues || []).map(issue => issue.team))].sort(), [report]);
   const statuses = useMemo(() => [...new Set((report?.issues || []).map(issue => issue.status))].sort(), [report]);
   const teamPageNeedsExport = needsCustomChartsExport(teamPage?.html);
+  const teamChartOptions = useMemo(() => teamCharts?.available_teams?.length ? teamCharts.available_teams : teams, [teamCharts, teams]);
 
   const selectResource = (resource: JiraResource) => {
     setSelectedResource(resource.assignee);
@@ -377,8 +382,27 @@ export default function Jira() {
                 <div className="flex flex-col gap-1 mb-3">
                   <h3 className="text-sm font-semibold text-gray-900">Python generated diagrams</h3>
                   <p className="text-xs text-gray-500">
-                    {teamCharts.total_issues} issues · {teamCharts.total_story_points} story points · generated from live JIRA data
+                    {teamCharts.selected_team && teamCharts.selected_team !== 'All' ? `${teamCharts.selected_team} · ` : ''}{teamCharts.total_issues} issues · {teamCharts.total_story_points} story points · generated from live JIRA data
                   </p>
+                </div>
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="text-xs text-gray-500 flex items-center gap-2">
+                    Team
+                    <select
+                      value={teamChartFilter}
+                      onChange={event => {
+                        const team = event.target.value;
+                        setTeamChartFilter(team);
+                        loadTeamJiraCharts(team);
+                      }}
+                      disabled={teamChartsLoading}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                    >
+                      <option value="All">All teams</option>
+                      {teamChartOptions.map(team => <option key={team} value={team}>{team}</option>)}
+                    </select>
+                  </label>
+                  <div className="text-xs text-gray-400">Charts refresh when team changes.</div>
                 </div>
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                   {teamCharts.charts.map(chart => (

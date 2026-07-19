@@ -48,6 +48,22 @@ function runPythonCharts(report: any): Promise<any> {
   });
 }
 
+function availableTeamNames(report: any): string[] {
+  return [...new Set((report?.issues || []).map((issue: any) => issue.team || 'Unassigned'))].sort() as string[];
+}
+
+function filterReportByTeam(report: any, team: string): any {
+  if (!team || team === 'All') return report;
+  const issues = (report.issues || []).filter((issue: any) => (issue.team || 'Unassigned') === team);
+  return {
+    ...report,
+    selected_team: team,
+    total_issues: issues.length,
+    total_story_points: issues.reduce((sum: number, issue: any) => sum + (Number(issue.story_points) || 0), 0),
+    issues,
+  };
+}
+
 function authHeader(): string {
   return `Basic ${Buffer.from(`${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}`).toString('base64')}`;
 }
@@ -302,14 +318,19 @@ async function handleTeamCharts(req: Request, res: Response) {
   try {
     const isViewer = (req.session as any).role === 'viewer';
     const requestedJql = !isViewer && typeof req.body?.jql === 'string' ? req.body.jql.trim() : '';
+    const selectedTeam = typeof req.body?.team === 'string' ? req.body.team.trim() : 'All';
     const report = await buildReport(requestedJql || DEFAULT_JIRA_JQL);
-    const charts = await runPythonCharts(report);
+    const available_teams = availableTeamNames(report);
+    const filteredReport = filterReportByTeam(report, selectedTeam);
+    const charts = await runPythonCharts(filteredReport);
     res.json({
       ...charts,
-      jql: report.jql,
-      fetched_at: report.fetched_at,
-      total_issues: report.total_issues,
-      total_story_points: report.total_story_points,
+      jql: filteredReport.jql,
+      fetched_at: filteredReport.fetched_at,
+      selected_team: selectedTeam || 'All',
+      available_teams,
+      total_issues: filteredReport.total_issues,
+      total_story_points: filteredReport.total_story_points,
     });
   } catch (error: any) {
     const status = error?.response?.status;
