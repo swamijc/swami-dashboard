@@ -193,7 +193,31 @@ export default function TimesheetReport() {
     fetchReport(from, to, selectedProjects, selectedAccount);
   }
 
-  const overall = data?.overall ?? { total: 0, saved: 0, submitted: 0, approved: 0, disputed: 0 };
+  // Derive overall counts from selectedProjectBreakdown when project pills are filtered,
+  // so KPI cards and overall status pie always reflect the active project selection.
+  const allProjectsSelected = useMemo(
+    () => (data?.projectBreakdown ?? []).every(p => selectedProjects.includes(p.projectId) || selectedProjects.includes(p.projectName)),
+    [data?.projectBreakdown, selectedProjects]
+  );
+
+  const overall = useMemo(() => {
+    // If all projects are selected (or no project breakdown exists), use raw overall
+    if (allProjectsSelected || selectedProjectBreakdown.length === 0) {
+      return data?.overall ?? { total: 0, saved: 0, submitted: 0, approved: 0, disputed: 0 };
+    }
+    // Compute from the selected project breakdown
+    return selectedProjectBreakdown.reduce(
+      (acc, p) => ({
+        total:     acc.total     + p.total,
+        saved:     acc.saved     + p.saved,
+        submitted: acc.submitted + p.submitted,
+        approved:  acc.approved  + p.approved,
+        disputed:  acc.disputed  + p.disputed,
+      }),
+      { total: 0, saved: 0, submitted: 0, approved: 0, disputed: 0 }
+    );
+  }, [data?.overall, selectedProjectBreakdown, allProjectsSelected]);
+
   const pieData = [
     { name: 'Saved',     value: overall.saved,     color: COLORS.saved },
     { name: 'Submitted', value: overall.submitted,  color: COLORS.submitted },
@@ -555,6 +579,11 @@ export default function TimesheetReport() {
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">Individual Report</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {data.fromDate} → {data.toDate} · {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''}
+                  {!allProjectsSelected && (
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                      ℹ️ Run Report to filter by selected projects
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
