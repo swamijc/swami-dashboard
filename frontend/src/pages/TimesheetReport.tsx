@@ -143,8 +143,8 @@ export default function TimesheetReport() {
     setError('');
     try {
       const acc = ACCOUNTS.find(a => a.id === accountId);
-      // Include Time Off (via getEmployeeReport) when 'all' or 'timeoff' is selected
-      const includeTimeOff = accountId === 'all' || accountId === 'timeoff';
+      // Include Time Off (via getEmployeeReport) when 'timeoff' is selected
+      const includeTimeOff = accountId === 'timeoff';
       const resp = await api.post('/timesheet-report/data', {
         fromDate: from,
         toDate: to,
@@ -280,53 +280,62 @@ export default function TimesheetReport() {
         </a>
       </div>
 
-      {/* ── Filters ── */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 space-y-4">
-        {/* Row 1: Account + Projects */}
-        <div className="flex flex-wrap gap-6">
-          {/* Account selector */}
-          <div className="min-w-[180px]">
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Account Name</label>
-            <select
-              value={selectedAccount}
-              onChange={e => handleAccountChange(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            >
-              <option value="all">All Accounts</option>
-              {ACCOUNTS.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-          </div>
+      {/* ── Account tabs ── */}
+      <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800">
+        {ACCOUNTS.map(acc => (
+          <button
+            key={acc.id}
+            type="button"
+            onClick={() => {
+              // Switch account, select all its projects, and auto-fetch
+              const projects = acc.projects.map(p => p.id);
+              setSelectedAccount(acc.id);
+              setSelectedProjects(projects);
+              fetchReport(fromDate, toDate, projects, acc.id);
+            }}
+            className={`relative px-5 py-3 text-sm font-semibold transition whitespace-nowrap
+              ${selectedAccount === acc.id
+                ? 'text-[#0072ce] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#0072ce] after:rounded-t'
+                : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'}`}
+          >
+            {acc.name === 'Boots UK Ltd.' ? '🏢 ' : '🏖️ '}
+            {acc.name}
+            {loading && selectedAccount === acc.id && (
+              <span className="ml-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-[#0072ce] border-t-transparent" />
+            )}
+          </button>
+        ))}
+      </div>
 
-          {/* Project multi-select */}
-          <div className="flex-1 min-w-[260px]">
-            <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Projects</label>
-              <div className="flex gap-3 text-xs">
-                <button type="button" onClick={() => toggleAllVisible(true)}
-                  className="text-blue-600 hover:underline dark:text-blue-400">All</button>
-                <button type="button" onClick={() => toggleAllVisible(false)}
-                  className="text-gray-400 hover:underline">None</button>
-              </div>
+      {/* ── Filters (projects + date range) ── */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 space-y-4">
+        {/* Project pills for active account */}
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Projects</label>
+            <div className="flex gap-3 text-xs">
+              <button type="button" onClick={() => toggleAllVisible(true)}
+                className="text-blue-600 hover:underline dark:text-blue-400">All</button>
+              <button type="button" onClick={() => toggleAllVisible(false)}
+                className="text-gray-400 hover:underline">None</button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {visibleProjects.map(p => (
-                <label key={p.id} className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition select-none
-                  ${ selectedProjects.includes(p.id)
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
-                    : 'border-gray-300 bg-white text-gray-600 hover:border-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300' }`}>
-                  <input type="checkbox" className="sr-only"
-                    checked={selectedProjects.includes(p.id)}
-                    onChange={() => toggleProject(p.id)} />
-                  {selectedProjects.includes(p.id) ? '✓ ' : ''}{p.label}
-                </label>
-              ))}
-            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {visibleProjects.map(p => (
+              <label key={p.id} className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition select-none
+                ${ selectedProjects.includes(p.id)
+                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                  : 'border-gray-300 bg-white text-gray-600 hover:border-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300' }`}>
+                <input type="checkbox" className="sr-only"
+                  checked={selectedProjects.includes(p.id)}
+                  onChange={() => toggleProject(p.id)} />
+                {selectedProjects.includes(p.id) ? '✓ ' : ''}{p.label}
+              </label>
+            ))}
           </div>
         </div>
 
-        {/* Row 2: Date range */}
+        {/* Date range */}
         <div className="flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">From</label>
