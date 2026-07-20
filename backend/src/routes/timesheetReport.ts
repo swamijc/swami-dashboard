@@ -137,8 +137,12 @@ router.post('/data', requireAuth, async (req: Request, res: Response) => {
 
   const { projectId, accountCode, employeeCode } = getExtraConfig();
 
+  // IMPORTANT: Always use the backend's internal project IDs for the Photon projectReport API.
+  // The frontend sends human-readable projectCodes (13755, 12667 etc.) which are response-level
+  // identifiers, NOT the internal API parameter IDs (6347, 5284 etc.) that Photon requires.
+  // Frontend projectIds are used only for response-level filtering (pie charts, table).
   const payload: Record<string, string> = {
-    projectId:   reqProjectIds  || projectId,
+    projectId,   // always DEFAULT_PROJECT_IDS = '6347,5284,5704,4545'
     accountCode: reqAccountCode || accountCode,
     status: '1,2,3,4',
     fromDate,
