@@ -62,6 +62,22 @@ function previousMonthRange(): { from: string; to: string } {
   return { from: localIso(from), to: localIso(to) };
 }
 
+// Previous week Monday → current week Sunday (two-week window for Time Off tab)
+function twoWeekRange(): { from: string; to: string } {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
+  // Monday of the current week
+  const currentMonday = new Date(now);
+  currentMonday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  // Monday of the previous week
+  const prevMonday = new Date(currentMonday);
+  prevMonday.setDate(currentMonday.getDate() - 7);
+  // Sunday of the current week
+  const currentSunday = new Date(currentMonday);
+  currentSunday.setDate(currentMonday.getDate() + 6);
+  return { from: localIso(prevMonday), to: localIso(currentSunday) };
+}
+
 // ── Types ────────────────────────────────────────────────────────
 interface OverallStats { total: number; saved: number; submitted: number; approved: number; disputed: number; }
 interface DailyEntry   { date: string; saved: number; submitted: number; approved: number; disputed: number; total: number; }
@@ -291,12 +307,22 @@ export default function TimesheetReport() {
               const projects = acc.projects.map(p => p.id);
               setSelectedAccount(acc.id);
               setSelectedProjects(projects);
+              // Time Off tab defaults to prev week + current week; Boots UK keeps current dates
+              let tabFrom = fromDate;
+              let tabTo   = toDate;
+              if (acc.id === 'timeoff') {
+                const r = twoWeekRange();
+                tabFrom = r.from;
+                tabTo   = r.to;
+                setFromDate(tabFrom);
+                setToDate(tabTo);
+              }
               // Show account-specific cached data immediately while fetching live
               api.get(`/timesheet-report/cached?accountId=${acc.id}`)
                 .then(r => { if (r.data?.cached) setData(r.data); })
                 .catch(() => {});
-              // Fetch live in background (updates display if successful)
-              fetchReport(fromDate, toDate, projects, acc.id);
+              // Fetch live with the correct date range for this tab
+              fetchReport(tabFrom, tabTo, projects, acc.id);
             }}
             className={`relative px-5 py-3 text-sm font-semibold transition whitespace-nowrap
               ${selectedAccount === acc.id
