@@ -105,7 +105,8 @@ function fmt(date: string): string {
 
 // ── Main page ────────────────────────────────────────────────────
 export default function TimesheetReport() {
-  const init = currentMonthRange();
+  // Default: Boots UK Ltd. tab with prev week + current week date range
+  const init = twoWeekRange();
   const [fromDate,         setFromDate]         = useState(init.from);
   const [toDate,           setToDate]           = useState(init.to);
   const [data,             setData]             = useState<ReportData | null>(null);
@@ -116,13 +117,12 @@ export default function TimesheetReport() {
   const [sortDir,          setSortDir]          = useState<'asc'|'desc'>('desc');
   const [page,             setPage]             = useState(1);
   const PAGE_SIZE = 10;
-  const [selectedAccount,  setSelectedAccount]  = useState('all');
-  const [selectedProjects, setSelectedProjects] = useState<string[]>(ALL_PROJECTS.map(p => p.id));
+  const bootsProjects = ACCOUNTS.find(a => a.id === 'boots')?.projects.map(p => p.id) ?? ALL_PROJECTS.map(p => p.id);
+  const [selectedAccount,  setSelectedAccount]  = useState('boots');
+  const [selectedProjects, setSelectedProjects] = useState<string[]>(bootsProjects);
 
   // Projects visible in the checkbox list based on selected account
-  const visibleProjects = selectedAccount === 'all'
-    ? ALL_PROJECTS
-    : (ACCOUNTS.find(a => a.id === selectedAccount)?.projects ?? []);
+  const visibleProjects = ACCOUNTS.find(a => a.id === selectedAccount)?.projects ?? ALL_PROJECTS;
 
   function handleAccountChange(accountId: string) {
     setSelectedAccount(accountId);
@@ -143,13 +143,15 @@ export default function TimesheetReport() {
     else         setSelectedProjects(prev => prev.filter(id => !visibleProjects.some(p => p.id === id)));
   }
 
-  // ─ Load cached result for the active account on mount (no live call) ──────
+  // ─ On mount: load Boots UK cache then auto-fetch live for the two-week range ─
   useEffect(() => {
-    // Load Boots UK cache on initial mount (first tab)
+    // Show last Boots UK cached data immediately
     api.get('/timesheet-report/cached?accountId=boots')
       .then(r => { if (r.data?.cached) setData(r.data); })
-      .catch(() => {/* no cache yet — page starts empty */});
-  }, []);
+      .catch(() => {});
+    // Fetch live in background using the default two-week range
+    fetchReport(init.from, init.to, bootsProjects, 'boots');
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchReport = useCallback(async (
     from: string, to: string,
