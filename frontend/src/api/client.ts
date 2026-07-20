@@ -16,6 +16,7 @@ api.interceptors.response.use(
       url.includes('/session-status') ||
       url.includes('/tracking/') ||
       url.includes('/timesheet/') ||
+      url.includes('/timesheet-report/') ||
       url.includes('/admin/configs');
     if (
       err.response?.status === 401 &&
