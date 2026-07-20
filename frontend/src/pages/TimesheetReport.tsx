@@ -193,6 +193,14 @@ export default function TimesheetReport() {
     fetchReport(from, to, selectedProjects, selectedAccount);
   }
 
+  // Filter projectBreakdown to only entries matching the currently selected project pills
+  const selectedProjectBreakdown = useMemo(() =>
+    (data?.projectBreakdown ?? []).filter(p =>
+      selectedProjects.includes(p.projectId) || selectedProjects.includes(p.projectName)
+    ),
+    [data?.projectBreakdown, selectedProjects]
+  );
+
   // Derive overall counts from selectedProjectBreakdown when project pills are filtered,
   // so KPI cards and overall status pie always reflect the active project selection.
   const allProjectsSelected = useMemo(
@@ -224,14 +232,6 @@ export default function TimesheetReport() {
     { name: 'Approved',  value: overall.approved,   color: COLORS.approved },
     { name: 'Disputed',  value: overall.disputed,   color: COLORS.disputed },
   ].filter(d => d.value > 0);
-
-  // Filter projectBreakdown to only entries matching the currently selected project pills
-  const selectedProjectBreakdown = useMemo(() =>
-    (data?.projectBreakdown ?? []).filter(p =>
-      selectedProjects.includes(p.projectId) || selectedProjects.includes(p.projectName)
-    ),
-    [data?.projectBreakdown, selectedProjects]
-  );
 
   // ─ Account Distribution pie (Boots UK Ltd. vs Time Off) — respects selected projects
   const accountPie = useMemo(() => {
