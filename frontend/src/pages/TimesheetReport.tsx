@@ -482,23 +482,25 @@ export default function TimesheetReport() {
               )}
             </div>
 
-            {/* 2. Account Distribution */}
+            {/* 2. Daily Submissions */}
             <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Account Distribution</h2>
-              {accountPie.length > 0 ? (
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Daily Submissions</h2>
+              {data.daily.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
-                  <PieChart>
-                    <Pie data={accountPie} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={120} innerRadius={60} paddingAngle={2} label={(props: any) => `${props.name ?? ''} ${((props.percent ?? 0) * 100).toFixed(0)}%`}>
-                      {accountPie.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v) => (v != null ? Number(v).toLocaleString() : '0')} />
+                  <BarChart data={data.daily} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tickFormatter={fmt} tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip labelFormatter={(label) => fmt(String(label ?? ''))} />
                     <Legend />
-                  </PieChart>
+                    <Bar dataKey="saved"     name="Saved"     fill={COLORS.saved}     stackId="a" />
+                    <Bar dataKey="submitted" name="Submitted" fill={COLORS.submitted} stackId="a" />
+                    <Bar dataKey="approved"  name="Approved"  fill={COLORS.approved}  stackId="a" />
+                    <Bar dataKey="disputed"  name="Disputed"  fill={COLORS.disputed}  stackId="a" radius={[3, 3, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="py-20 text-center text-sm text-gray-400">No data for this period</p>
+                <p className="py-20 text-center text-sm text-gray-400">No daily data for this period</p>
               )}
             </div>
 
@@ -522,25 +524,23 @@ export default function TimesheetReport() {
               )}
             </div>
 
-            {/* 4. Daily Submissions */}
+            {/* 4. Account Distribution */}
             <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Daily Submissions</h2>
-              {data.daily.length > 0 ? (
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Account Distribution</h2>
+              {accountPie.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={data.daily} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="date" tickFormatter={fmt} tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip labelFormatter={(label) => fmt(String(label ?? ''))} />
+                  <PieChart>
+                    <Pie data={accountPie} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={120} innerRadius={60} paddingAngle={2} label={(props: any) => `${props.name ?? ''} ${((props.percent ?? 0) * 100).toFixed(0)}%`}>
+                      {accountPie.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => (v != null ? Number(v).toLocaleString() : '0')} />
                     <Legend />
-                    <Bar dataKey="saved"     name="Saved"     fill={COLORS.saved}     stackId="a" />
-                    <Bar dataKey="submitted" name="Submitted" fill={COLORS.submitted} stackId="a" />
-                    <Bar dataKey="approved"  name="Approved"  fill={COLORS.approved}  stackId="a" />
-                    <Bar dataKey="disputed"  name="Disputed"  fill={COLORS.disputed}  stackId="a" radius={[3, 3, 0, 0]} />
-                  </BarChart>
+                  </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="py-20 text-center text-sm text-gray-400">No daily data for this period</p>
+                <p className="py-20 text-center text-sm text-gray-400">No data for this period</p>
               )}
             </div>
           </div>
