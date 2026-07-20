@@ -536,6 +536,7 @@ export default function TimesheetReport() {
               {selectedProjectBreakdown.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart
+                    layout="vertical"
                     data={selectedProjectBreakdown.map(p => {
                       const acc = ACCOUNTS.find(a => a.projects.some(pr => pr.id === p.projectId || pr.id === p.projectName));
                       const proj = acc?.projects.find(pr => pr.id === p.projectId || pr.id === p.projectName);
@@ -547,17 +548,17 @@ export default function TimesheetReport() {
                         disputed:  p.disputed,
                       };
                     })}
-                    margin={{ top: 5, right: 20, left: 0, bottom: 60 }}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" interval={0} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={220} />
                     <Tooltip />
                     <Legend />
                     <Bar dataKey="saved"     name="Saved"     fill={COLORS.saved}     stackId="a" />
                     <Bar dataKey="submitted" name="Submitted" fill={COLORS.submitted} stackId="a" />
                     <Bar dataKey="approved"  name="Approved"  fill={COLORS.approved}  stackId="a" />
-                    <Bar dataKey="disputed"  name="Disputed"  fill={COLORS.disputed}  stackId="a" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="disputed"  name="Disputed"  fill={COLORS.disputed}  stackId="a" radius={[0, 3, 3, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
