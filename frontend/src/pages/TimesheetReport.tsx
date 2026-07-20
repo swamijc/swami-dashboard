@@ -277,9 +277,18 @@ export default function TimesheetReport() {
       {/* ── Error ── */}
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-          {error}
+          <p className="font-semibold">{error}</p>
           {error.toLowerCase().includes('session') && (
-            <span> — go to <strong>Admin</strong> and save the Photon Track cookie.</span>
+            <p className="mt-2 text-xs leading-5">
+              Shibboleth SSO sessions expire after ~1 hour. To get a fresh cookie:
+              &nbsp;<strong>1.</strong> Open{' '}
+              <a href="https://timetracker.photon.com/timetracker/" target="_blank" rel="noreferrer"
+                 className="underline hover:text-red-900 dark:hover:text-red-100">
+                timetracker.photon.com
+              </a>{' '}
+              and log in. &nbsp;<strong>2.</strong> Open DevTools → Network → copy the <code>Cookie:</code> line from any request.
+              &nbsp;<strong>3.</strong> Go to <strong>Admin → Photon Track</strong> and save the new cookie.
+            </p>
           )}
         </div>
       )}
