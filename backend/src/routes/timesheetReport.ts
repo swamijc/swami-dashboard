@@ -50,7 +50,12 @@ function getExtraConfig(): { projectId: string; accountCode: string; employeeCod
 
 // ── POST /api/timesheet-report/data ─────────────────────────────
 router.post('/data', requireAuth, async (req: Request, res: Response) => {
-  const { fromDate, toDate } = req.body as { fromDate?: string; toDate?: string };
+  const {
+    fromDate, toDate,
+    projectIds: reqProjectIds,  // optional comma-separated override from frontend
+    accountCode: reqAccountCode,  // optional override from frontend
+  } = req.body as { fromDate?: string; toDate?: string; projectIds?: string; accountCode?: string };
+
   if (!fromDate || !toDate) {
     res.status(400).json({ error: 'fromDate and toDate are required' });
     return;
@@ -65,8 +70,8 @@ router.post('/data', requireAuth, async (req: Request, res: Response) => {
   const { projectId, accountCode, employeeCode } = getExtraConfig();
 
   const payload: Record<string, string> = {
-    projectId,
-    accountCode,
+    projectId:   reqProjectIds  || projectId,
+    accountCode: reqAccountCode || accountCode,
     status: '1,2,3,4',
     fromDate,
     toDate,

@@ -5,6 +5,30 @@ import {
 } from 'recharts';
 import api from '../api/client';
 
+// ── Account & Project master data ─────────────────────────────
+const ACCOUNTS = [
+  {
+    id: 'boots',
+    name: 'Boots UK Ltd.',
+    code: '0016F00004AtTC8QAN',
+    projects: [
+      { id: '13755', label: "Mobile App Condor Squad (Mar'26-May'26)" },
+      { id: '12667', label: "Boots Mobile App'23" },
+      { id: '11925', label: 'GCB Support (Boots International)' },
+      { id: '13087', label: 'Boots Staffing' },
+    ],
+  },
+  {
+    id: 'timeoff',
+    name: 'Time Off',
+    code: '0016F00004AtTC8QAN',
+    projects: [
+      { id: '99995', label: 'Time Off' },
+    ],
+  },
+];
+const ALL_PROJECTS = ACCOUNTS.flatMap(a => a.projects);
+
 // ── Colour palette ──────────────────────────────────────────────
 const COLORS = {
   saved:     '#94a3b8', // slate-400
@@ -60,33 +84,74 @@ function fmt(date: string): string {
 // ── Main page ────────────────────────────────────────────────────
 export default function TimesheetReport() {
   const init = currentMonthRange();
-  const [fromDate, setFromDate] = useState(init.from);
-  const [toDate,   setToDate]   = useState(init.to);
-  const [data,     setData]     = useState<ReportData | null>(null);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-  const [empFilter, setEmpFilter] = useState('');
+  const [fromDate,         setFromDate]         = useState(init.from);
+  const [toDate,           setToDate]           = useState(init.to);
+  const [data,             setData]             = useState<ReportData | null>(null);
+  const [loading,          setLoading]          = useState(false);
+  const [error,            setError]            = useState('');
+  const [empFilter,        setEmpFilter]        = useState('');
+  const [selectedAccount,  setSelectedAccount]  = useState('all'); // 'all' | account.id
+  const [selectedProjects, setSelectedProjects] = useState<string[]>(ALL_PROJECTS.map(p => p.id));
 
-  const fetchReport = useCallback(async (from: string, to: string) => {
+  // Projects visible in the checkbox list based on selected account
+  const visibleProjects = selectedAccount === 'all'
+    ? ALL_PROJECTS
+    : (ACCOUNTS.find(a => a.id === selectedAccount)?.projects ?? []);
+
+  function handleAccountChange(accountId: string) {
+    setSelectedAccount(accountId);
+    // Auto-select all projects for the chosen account
+    const projects = accountId === 'all'
+      ? ALL_PROJECTS
+      : (ACCOUNTS.find(a => a.id === accountId)?.projects ?? []);
+    setSelectedProjects(projects.map(p => p.id));
+  }
+
+  function toggleProject(id: string) {
+    setSelectedProjects(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    );
+  }
+
+  function toggleAllVisible(checked: boolean) {
+    if (checked) setSelectedProjects(prev => Array.from(new Set([...prev, ...visibleProjects.map(p => p.id)])));
+    else         setSelectedProjects(prev => prev.filter(id => !visibleProjects.some(p => p.id === id)));
+  }
+
+  const fetchReport = useCallback(async (
+    from: string, to: string,
+    projIds: string[] = selectedProjects,
+    accountId: string = selectedAccount,
+  ) => {
     setLoading(true);
     setError('');
     setData(null);
     try {
-      const resp = await api.post('/timesheet-report/data', { fromDate: from, toDate: to });
+      const acc = ACCOUNTS.find(a => a.id === accountId);
+      const resp = await api.post('/timesheet-report/data', {
+        fromDate: from,
+        toDate: to,
+        projectIds: projIds.length > 0 ? projIds.join(',') : undefined,
+        accountCode: acc?.code,
+      });
       setData(resp.data);
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Failed to load report');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedProjects, selectedAccount]);
 
   useEffect(() => { fetchReport(fromDate, toDate); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  function runReport(from = fromDate, to = toDate) {
+    fetchReport(from, to, selectedProjects, selectedAccount);
+  }
 
   function applyRange(from: string, to: string) {
     setFromDate(from);
     setToDate(to);
-    fetchReport(from, to);
+    fetchReport(from, to, selectedProjects, selectedAccount);
   }
 
   const overall = data?.overall ?? { total: 0, saved: 0, submitted: 0, approved: 0, disputed: 0 };
@@ -119,9 +184,54 @@ export default function TimesheetReport() {
         </a>
       </div>
 
-      {/* ── Date Range Controls ── */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-        <div className="flex flex-wrap items-end gap-3">
+      {/* ── Filters ── */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 space-y-4">
+        {/* Row 1: Account + Projects */}
+        <div className="flex flex-wrap gap-6">
+          {/* Account selector */}
+          <div className="min-w-[180px]">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Account Name</label>
+            <select
+              value={selectedAccount}
+              onChange={e => handleAccountChange(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            >
+              <option value="all">All Accounts</option>
+              {ACCOUNTS.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Project multi-select */}
+          <div className="flex-1 min-w-[260px]">
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Projects</label>
+              <div className="flex gap-3 text-xs">
+                <button type="button" onClick={() => toggleAllVisible(true)}
+                  className="text-blue-600 hover:underline dark:text-blue-400">All</button>
+                <button type="button" onClick={() => toggleAllVisible(false)}
+                  className="text-gray-400 hover:underline">None</button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {visibleProjects.map(p => (
+                <label key={p.id} className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition select-none
+                  ${ selectedProjects.includes(p.id)
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                    : 'border-gray-300 bg-white text-gray-600 hover:border-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300' }`}>
+                  <input type="checkbox" className="sr-only"
+                    checked={selectedProjects.includes(p.id)}
+                    onChange={() => toggleProject(p.id)} />
+                  {selectedProjects.includes(p.id) ? '✓ ' : ''}{p.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2: Date range */}
+        <div className="flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">From</label>
             <input
@@ -141,8 +251,8 @@ export default function TimesheetReport() {
             />
           </div>
           <button
-            onClick={() => fetchReport(fromDate, toDate)}
-            disabled={loading}
+            onClick={() => runReport()}
+            disabled={loading || selectedProjects.length === 0}
             className="rounded-lg bg-[#0072ce] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#005eb8] disabled:opacity-50"
           >
             {loading ? 'Loading…' : 'Run Report'}
