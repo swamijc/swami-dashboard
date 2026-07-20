@@ -48,7 +48,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           {navItems.map(item => {
             if (item.adminOnly && user?.role !== 'admin') return null;
             if (user?.role === 'viewer' && !['/', '/tracking', '/jira', '/onboarding', '/quality', '/release', '/timesheet-report'].includes(item.path)) return null;
-            const active = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+            const active = location.pathname === item.path ||
+              (item.path !== '/' && location.pathname.startsWith(item.path + '/'));
             return (
               <Link
                 key={item.path}
