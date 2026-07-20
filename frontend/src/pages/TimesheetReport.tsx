@@ -127,9 +127,10 @@ export default function TimesheetReport() {
     else         setSelectedProjects(prev => prev.filter(id => !visibleProjects.some(p => p.id === id)));
   }
 
-  // ─ Load cached result on mount (no live call) ──────────────────────────
+  // ─ Load cached result for the active account on mount (no live call) ──────
   useEffect(() => {
-    api.get('/timesheet-report/cached')
+    // Load Boots UK cache on initial mount (first tab)
+    api.get('/timesheet-report/cached?accountId=boots')
       .then(r => { if (r.data?.cached) setData(r.data); })
       .catch(() => {/* no cache yet — page starts empty */});
   }, []);
@@ -287,10 +288,14 @@ export default function TimesheetReport() {
             key={acc.id}
             type="button"
             onClick={() => {
-              // Switch account, select all its projects, and auto-fetch
               const projects = acc.projects.map(p => p.id);
               setSelectedAccount(acc.id);
               setSelectedProjects(projects);
+              // Show account-specific cached data immediately while fetching live
+              api.get(`/timesheet-report/cached?accountId=${acc.id}`)
+                .then(r => { if (r.data?.cached) setData(r.data); })
+                .catch(() => {});
+              // Fetch live in background (updates display if successful)
               fetchReport(fromDate, toDate, projects, acc.id);
             }}
             className={`relative px-5 py-3 text-sm font-semibold transition whitespace-nowrap

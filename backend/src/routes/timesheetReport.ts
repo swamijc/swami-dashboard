@@ -100,13 +100,20 @@ function getExtraConfig(): { projectId: string; accountCode: string; employeeCod
   return { projectId: DEFAULT_PROJECT_IDS, accountCode: DEFAULT_ACCOUNT_CODE, employeeCode };
 }
 
-// ── GET /api/timesheet-report/cached ───────────────────────────
-// Returns the last successfully fetched report from local cache.
+// ── GET /api/timesheet-report/cached?accountId=boots ──────────
+// Returns the last successfully fetched report from cache for the given account.
+// Falls back to the generic 'latest' cache if no account-specific entry exists.
 router.get('/cached', requireAuth, (req: Request, res: Response) => {
   try {
-    const row = getDb().prepare(
-      `SELECT data, fetched_at FROM timesheet_report_cache WHERE id='latest'`
-    ).get() as any;
+    const { accountId } = req.query as { accountId?: string };
+    const db = getDb();
+    // Try account-specific key first, then fall back to generic 'latest'
+    const cacheKeys = accountId ? [`${accountId}_latest`, 'latest'] : ['latest'];
+    let row: any = null;
+    for (const key of cacheKeys) {
+      row = db.prepare(`SELECT data, fetched_at FROM timesheet_report_cache WHERE id=?`).get(key);
+      if (row) break;
+    }
     if (!row) { res.json({ cached: false }); return; }
     const data = JSON.parse(row.data);
     res.json({ cached: true, cachedAt: row.fetched_at, ...data });
@@ -183,11 +190,14 @@ router.post('/data', requireAuth, async (req: Request, res: Response) => {
 
     const processed = processReport(rawData, fromDate!, toDate!);
 
-    // Persist to cache so future page loads can show the last result
+    // Persist to account-specific cache AND generic 'latest'
     try {
-      getDb().prepare(
-        `INSERT OR REPLACE INTO timesheet_report_cache (id, data, fetched_at, params) VALUES ('latest', ?, datetime('now'), ?)`
-      ).run(JSON.stringify(processed), JSON.stringify({ fromDate, toDate, projectIds: reqProjectIds }));
+      const db = getDb();
+      const cacheId = includeTimeOff ? 'timeoff_latest' : 'boots_latest';
+      const serialised = JSON.stringify(processed);
+      const params = JSON.stringify({ fromDate, toDate });
+      db.prepare(`INSERT OR REPLACE INTO timesheet_report_cache (id, data, fetched_at, params) VALUES (?, ?, datetime('now'), ?)`).run(cacheId, serialised, params);
+      db.prepare(`INSERT OR REPLACE INTO timesheet_report_cache (id, data, fetched_at, params) VALUES ('latest', ?, datetime('now'), ?)`).run(serialised, params);
     } catch { /* cache failure is non-fatal */ }
 
     res.json(processed);
