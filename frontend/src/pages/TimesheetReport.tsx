@@ -145,7 +145,7 @@ export default function TimesheetReport() {
 
   // ─ On mount: load Boots UK cache then auto-fetch live for the two-week range ─
   useEffect(() => {
-    // Show last Boots UK cached data immediately
+    // Show last Boots UK cached data immediately (Boots cache is always clean)
     api.get('/timesheet-report/cached?accountId=boots')
       .then(r => { if (r.data?.cached) setData(r.data); })
       .catch(() => {});
@@ -343,9 +343,19 @@ export default function TimesheetReport() {
                 setFromDate(tabFrom);
                 setToDate(tabTo);
               }
-              // Show account-specific cached data immediately while fetching live
+              // Show account-specific cached data immediately while fetching live.
+              // For Time Off: reject stale cache that contains non-Time-Off projects
+              // (legacy mixed Boots UK + Time Off cache from before the fix).
               api.get(`/timesheet-report/cached?accountId=${acc.id}`)
-                .then(r => { if (r.data?.cached) setData(r.data); })
+                .then(r => {
+                  if (!r.data?.cached) return;
+                  if (acc.id === 'timeoff') {
+                    const hasNonTimeOff = (r.data.projectBreakdown ?? [])
+                      .some((p: any) => p.projectId !== '99995' && p.projectName !== 'Time Off');
+                    if (hasNonTimeOff) return; // skip stale mixed cache
+                  }
+                  setData(r.data);
+                })
                 .catch(() => {});
               // Fetch live with the correct date range for this tab
               fetchReport(tabFrom, tabTo, projects, acc.id);
