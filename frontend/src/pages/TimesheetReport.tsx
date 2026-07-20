@@ -136,8 +136,12 @@ export default function TimesheetReport() {
         accountCode: acc?.code,
       });
       setData(resp.data);
+      setError(''); // clear any previous error on success
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Failed to load report');
+      const msg = err.response?.data?.error || err.message || 'Failed to load report';
+      setError(msg);
+      // Auto-dismiss error after 8 s so it doesn't block the cached report view
+      setTimeout(() => setError(e => e === msg ? '' : e), 8000);
     } finally {
       setLoading(false);
     }
@@ -310,20 +314,33 @@ export default function TimesheetReport() {
 
       {/* ── Error ── */}
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-          <p className="font-semibold">{error}</p>
-          {error.toLowerCase().includes('session') && (
-            <p className="mt-2 text-xs leading-5">
-              Shibboleth SSO sessions expire after ~1 hour. To get a fresh cookie:
-              &nbsp;<strong>1.</strong> Open{' '}
-              <a href="https://timetracker.photon.com/timetracker/" target="_blank" rel="noreferrer"
-                 className="underline hover:text-red-900 dark:hover:text-red-100">
-                timetracker.photon.com
-              </a>{' '}
-              and log in. &nbsp;<strong>2.</strong> Open DevTools → Network → copy the <code>Cookie:</code> line from any request.
-              &nbsp;<strong>3.</strong> Go to <strong>Admin → Photon Track</strong> and save the new cookie.
-            </p>
-          )}
+        <div className={`rounded-xl border px-4 py-3 text-sm ${
+          data // cached data already visible — show as a gentle warning, not a blocker
+            ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+            : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'
+        }`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              {data
+                ? <p><strong>Live refresh failed.</strong> {error.includes('session') ? 'Photon session expired — showing last cached data.' : error} The cached report above is still valid.</p>
+                : (
+                  <>
+                    <p className="font-semibold">{error}</p>
+                    {error.toLowerCase().includes('session') && (
+                      <p className="mt-2 text-xs leading-5">
+                        Shibboleth SSO sessions expire after ~1 hour. To get a fresh cookie:
+                        &nbsp;<strong>1.</strong> Open{' '}
+                        <a href="https://timetracker.photon.com/timetracker/" target="_blank" rel="noreferrer" className="underline">timetracker.photon.com</a>{' '}
+                        and log in. &nbsp;<strong>2.</strong> DevTools → Network → copy the <code>Cookie:</code> line from any request.
+                        &nbsp;<strong>3.</strong> Run the <code>pbpaste | node -e ...</code> script in terminal, or go to <strong>Admin → Photon Track</strong> and paste the cookie.
+                      </p>
+                    )}
+                  </>
+                )
+              }
+            </div>
+            <button type="button" onClick={() => setError('')} className="shrink-0 text-lg leading-none opacity-60 hover:opacity-100">×</button>
+          </div>
         </div>
       )}
 
@@ -460,6 +477,17 @@ export default function TimesheetReport() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── Empty state (no cache yet and not loading) ── */}
+      {!data && !loading && !error && (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-900">
+          <p className="text-2xl mb-3">📋</p>
+          <p className="text-base font-semibold text-gray-700 dark:text-gray-300">No report data yet</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Select your date range and click <strong>Run Report</strong> to fetch the timesheet data from Photon Timetracker.
+          </p>
+        </div>
       )}
 
       {/* ── Loading skeleton ── */}
