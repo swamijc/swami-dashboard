@@ -177,15 +177,15 @@ router.post('/data', requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
-    // Optionally fetch Time Off entries via per-employee getEmployeeReport calls
+    // For Time Off tab: fetch per-employee Time Off records and use them EXCLUSIVELY
+    // (do not mix with Boots UK projectReport records – the report must show only
+    //  employees who took Time Off under Boots UK Ltd. for the selected period)
     let rawData: unknown = response.data;
     if (includeTimeOff && employeeCode) {
       const timeOffRecs = await fetchTimeOffRecords(cookie, employeeCode, fromDate!, toDate!);
-      if (timeOffRecs.length > 0) {
-        // Merge Time Off records with Boots UK records
-        const bootsRecs: any[] = Array.isArray((rawData as any)?.data) ? (rawData as any).data : [];
-        rawData = { ...response.data as any, data: [...bootsRecs, ...timeOffRecs] };
-      }
+      // Use ONLY the Time Off records so that KPI cards, charts, and Individual
+      // Report table reflect exclusively Time Off data, not merged Boots UK data.
+      rawData = { data: timeOffRecs, statusCode: 0, status: 'SUCCESS' };
     }
 
     const processed = processReport(rawData, fromDate!, toDate!);
