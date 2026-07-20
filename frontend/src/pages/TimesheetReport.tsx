@@ -182,24 +182,32 @@ export default function TimesheetReport() {
     { name: 'Disputed',  value: overall.disputed,   color: COLORS.disputed },
   ].filter(d => d.value > 0);
 
-  // ─ Account Distribution pie (Boots UK Ltd. vs Time Off)
-  const accountPie = (() => {
-    const pb = data?.projectBreakdown ?? [];
-    if (pb.length === 0) return [];
+  // Filter projectBreakdown to only entries matching the currently selected project pills
+  const selectedProjectBreakdown = useMemo(() =>
+    (data?.projectBreakdown ?? []).filter(p =>
+      selectedProjects.includes(p.projectId) || selectedProjects.includes(p.projectName)
+    ),
+    [data?.projectBreakdown, selectedProjects]
+  );
+
+  // ─ Account Distribution pie (Boots UK Ltd. vs Time Off) — respects selected projects
+  const accountPie = useMemo(() => {
+    if (selectedProjectBreakdown.length === 0) return [];
     const accTotals: Record<string, { name: string; total: number; color: string }> = {};
-    pb.forEach((p, i) => {
+    selectedProjectBreakdown.forEach(p => {
       const acc = ACCOUNTS.find(a => a.projects.some(pr => pr.id === p.projectId || pr.id === p.projectName));
       const accName = acc?.name ?? (p.projectName || p.projectId);
-      if (!accTotals[accName]) accTotals[accName] = { name: accName, total: 0, color: PIE_COLORS[Object.keys(accTotals).length % PIE_COLORS.length] };
+      if (!accTotals[accName]) {
+        accTotals[accName] = { name: accName, total: 0, color: PIE_COLORS[Object.keys(accTotals).length % PIE_COLORS.length] };
+      }
       accTotals[accName].total += p.total;
     });
     return Object.values(accTotals).filter(d => d.total > 0).map(d => ({ ...d, value: d.total }));
-  })();
+  }, [selectedProjectBreakdown]);
 
-  // ─ Project Distribution pie (per project code)
-  const projectPie = (() => {
-    const pb = data?.projectBreakdown ?? [];
-    return pb.map((p, i) => {
+  // ─ Project Distribution pie — respects selected projects
+  const projectPie = useMemo(() =>
+    selectedProjectBreakdown.map((p, i) => {
       const acc = ACCOUNTS.find(a => a.projects.some(pr => pr.id === p.projectId || pr.id === p.projectName));
       const proj = acc?.projects.find(pr => pr.id === p.projectId || pr.id === p.projectName);
       return {
@@ -207,8 +215,9 @@ export default function TimesheetReport() {
         value: p.total,
         color: PIE_COLORS[i % PIE_COLORS.length],
       };
-    }).filter(d => d.value > 0);
-  })();
+    }).filter(d => d.value > 0),
+    [selectedProjectBreakdown]
+  );
 
   const filteredEmployees = useMemo(() => {
     const filtered = (data?.employees ?? []).filter(e =>
