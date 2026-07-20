@@ -61,7 +61,8 @@ function previousMonthRange(): { from: string; to: string } {
 interface OverallStats { total: number; saved: number; submitted: number; approved: number; disputed: number; }
 interface DailyEntry   { date: string; saved: number; submitted: number; approved: number; disputed: number; total: number; }
 interface EmployeeEntry{ code: string; name: string; saved: number; submitted: number; approved: number; disputed: number; total: number; hours: number; daysLogged: number; }
-interface ReportData   { fromDate: string; toDate: string; totalRecords: number; overall: OverallStats; daily: DailyEntry[]; employees: EmployeeEntry[]; }
+interface ProjectEntry { projectId: string; projectName: string; saved: number; submitted: number; approved: number; disputed: number; total: number; }
+interface ReportData   { fromDate: string; toDate: string; totalRecords: number; overall: OverallStats; daily: DailyEntry[]; employees: EmployeeEntry[]; projectBreakdown?: ProjectEntry[]; cached?: boolean; cachedAt?: string; }
 
 // ── Sub-components ───────────────────────────────────────────────
 function KpiCard({ label, value, color }: { label: string; value: number; color: string }) {
@@ -90,7 +91,7 @@ export default function TimesheetReport() {
   const [loading,          setLoading]          = useState(false);
   const [error,            setError]            = useState('');
   const [empFilter,        setEmpFilter]        = useState('');
-  const [selectedAccount,  setSelectedAccount]  = useState('all'); // 'all' | account.id
+  const [selectedAccount,  setSelectedAccount]  = useState('all');
   const [selectedProjects, setSelectedProjects] = useState<string[]>(ALL_PROJECTS.map(p => p.id));
 
   // Projects visible in the checkbox list based on selected account
@@ -100,7 +101,6 @@ export default function TimesheetReport() {
 
   function handleAccountChange(accountId: string) {
     setSelectedAccount(accountId);
-    // Auto-select all projects for the chosen account
     const projects = accountId === 'all'
       ? ALL_PROJECTS
       : (ACCOUNTS.find(a => a.id === accountId)?.projects ?? []);
@@ -118,6 +118,13 @@ export default function TimesheetReport() {
     else         setSelectedProjects(prev => prev.filter(id => !visibleProjects.some(p => p.id === id)));
   }
 
+  // ─ Load cached result on mount (no live call) ──────────────────────────
+  useEffect(() => {
+    api.get('/timesheet-report/cached')
+      .then(r => { if (r.data?.cached) setData(r.data); })
+      .catch(() => {/* no cache yet — page starts empty */});
+  }, []);
+
   const fetchReport = useCallback(async (
     from: string, to: string,
     projIds: string[] = selectedProjects,
@@ -125,7 +132,6 @@ export default function TimesheetReport() {
   ) => {
     setLoading(true);
     setError('');
-    setData(null);
     try {
       const acc = ACCOUNTS.find(a => a.id === accountId);
       const resp = await api.post('/timesheet-report/data', {
@@ -141,8 +147,6 @@ export default function TimesheetReport() {
       setLoading(false);
     }
   }, [selectedProjects, selectedAccount]);
-
-  useEffect(() => { fetchReport(fromDate, toDate); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   function runReport(from = fromDate, to = toDate) {
     fetchReport(from, to, selectedProjects, selectedAccount);
@@ -161,6 +165,34 @@ export default function TimesheetReport() {
     { name: 'Approved',  value: overall.approved,   color: COLORS.approved },
     { name: 'Disputed',  value: overall.disputed,   color: COLORS.disputed },
   ].filter(d => d.value > 0);
+
+  // Account + Project consolidated pie — built from projectBreakdown when available;
+  // falls back to account-level grouping using the ACCOUNTS config + selected projects.
+  const accountProjectPie = (() => {
+    const pb = data?.projectBreakdown ?? [];
+    if (pb.length > 0) {
+      return pb.map((p, i) => {
+        const acc = ACCOUNTS.find(a => a.projects.some(pr => pr.id === p.projectId || pr.id === p.projectName));
+        const proj = acc?.projects.find(pr => pr.id === p.projectId || pr.id === p.projectName);
+        return {
+          name: acc && proj ? `${acc.name} / ${proj.label}` : (p.projectName || p.projectId),
+          value: p.total,
+          color: PIE_COLORS[i % PIE_COLORS.length],
+        };
+      }).filter(d => d.value > 0);
+    }
+    // Fallback: count employees * submitted per selected account/project label
+    // (shows the distribution by selected filter even without raw project IDs in response)
+    return ACCOUNTS.flatMap(acc =>
+      acc.projects
+        .filter(p => selectedProjects.includes(p.id))
+        .map((proj, i) => ({
+          name: `${acc.name} / ${proj.label}`,
+          value: 0,
+          color: PIE_COLORS[i % PIE_COLORS.length],
+        }))
+    ).filter(d => d.value > 0);
+  })();
 
   const filteredEmployees = (data?.employees ?? []).filter(e =>
     !empFilter || e.name.toLowerCase().includes(empFilter.toLowerCase()) || e.code.includes(empFilter)
@@ -274,6 +306,13 @@ export default function TimesheetReport() {
         </div>
       </div>
 
+      {/* ── Cached data banner ── */}
+      {data?.cached && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex items-center justify-between dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <span>📋 Showing cached report from <strong>{data.cachedAt?.replace('T', ' ').slice(0, 16)} UTC</strong>. Click <em>Run Report</em> to fetch live data.</span>
+        </div>
+      )}
+
       {/* ── Error ── */}
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
@@ -305,10 +344,10 @@ export default function TimesheetReport() {
           </div>
 
           {/* ── Charts row ── */}
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
             {/* Overall status pie */}
             <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Overall Status Distribution</h2>
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Overall Status</h2>
               {pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
@@ -323,6 +362,26 @@ export default function TimesheetReport() {
                 </ResponsiveContainer>
               ) : (
                 <p className="py-16 text-center text-sm text-gray-400">No data for this period</p>
+              )}
+            </div>
+
+            {/* Account + Project consolidated pie */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Account / Project Distribution</h2>
+              {accountProjectPie.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie data={accountProjectPie} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={2} label={(props: any) => `${((props.percent ?? 0) * 100).toFixed(0)}%`}>
+                      {accountProjectPie.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => (v != null ? Number(v).toLocaleString() : '0')} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="py-16 text-center text-sm text-gray-400">Project breakdown not available in API response</p>
               )}
             </div>
 

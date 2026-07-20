@@ -48,6 +48,21 @@ function getExtraConfig(): { projectId: string; accountCode: string; employeeCod
   return { projectId: DEFAULT_PROJECT_IDS, accountCode: DEFAULT_ACCOUNT_CODE, employeeCode };
 }
 
+// ── GET /api/timesheet-report/cached ───────────────────────────
+// Returns the last successfully fetched report from local cache.
+router.get('/cached', requireAuth, (req: Request, res: Response) => {
+  try {
+    const row = getDb().prepare(
+      `SELECT data, fetched_at FROM timesheet_report_cache WHERE id='latest'`
+    ).get() as any;
+    if (!row) { res.json({ cached: false }); return; }
+    const data = JSON.parse(row.data);
+    res.json({ cached: true, cachedAt: row.fetched_at, ...data });
+  } catch {
+    res.json({ cached: false });
+  }
+});
+
 // ── POST /api/timesheet-report/data ─────────────────────────────
 router.post('/data', requireAuth, async (req: Request, res: Response) => {
   const {
@@ -109,6 +124,14 @@ router.post('/data', requireAuth, async (req: Request, res: Response) => {
     }
 
     const processed = processReport(response.data, fromDate, toDate);
+
+    // Persist to cache so future page loads can show the last result
+    try {
+      getDb().prepare(
+        `INSERT OR REPLACE INTO timesheet_report_cache (id, data, fetched_at, params) VALUES ('latest', ?, datetime('now'), ?)`
+      ).run(JSON.stringify(processed), JSON.stringify({ fromDate, toDate, projectIds: reqProjectIds }));
+    } catch { /* cache failure is non-fatal */ }
+
     res.json(processed);
   } catch (err: any) {
     const status = err.response?.status;
@@ -131,6 +154,10 @@ interface EmployeeEntry {
   saved: number; submitted: number; approved: number; disputed: number;
   total: number; hours: number; daysLogged: number;
 }
+interface ProjectEntry {
+  projectId: string; projectName: string;
+  saved: number; submitted: number; approved: number; disputed: number; total: number;
+}
 
 function processReport(raw: unknown, fromDate: string, toDate: string) {
   // Accept various response envelope shapes from Photon API
@@ -145,6 +172,7 @@ function processReport(raw: unknown, fromDate: string, toDate: string) {
   const overall = { total: records.length, saved: 0, submitted: 0, approved: 0, disputed: 0 };
   const dailyMap: Record<string, DailyEntry> = {};
   const empMap: Record<string, EmployeeEntry & { dates: Set<string> }> = {};
+  const projMap: Record<string, ProjectEntry> = {};
 
   for (const r of records) {
     const status = String(
@@ -190,6 +218,23 @@ function processReport(raw: unknown, fromDate: string, toDate: string) {
       empMap[code].hours += hours;
       if (date) empMap[code].dates.add(date);
     }
+
+    // Project-level aggregation
+    const projId = String(
+      r.projectId ?? r.project_id ?? r.projectCode ?? r.projectNo ?? r.projectNumber ?? ''
+    ).trim();
+    const projName = String(
+      r.projectName ?? r.project_name ?? r.projectTitle ?? r.projectDesc ?? projId
+    ).trim();
+    if (projId || projName) {
+      const key = projId || projName;
+      if (!projMap[key]) projMap[key] = { projectId: projId, projectName: projName || projId, saved: 0, submitted: 0, approved: 0, disputed: 0, total: 0 };
+      if      (status === '1') projMap[key].saved++;
+      else if (status === '2') projMap[key].submitted++;
+      else if (status === '3') projMap[key].approved++;
+      else if (status === '4') projMap[key].disputed++;
+      projMap[key].total++;
+    }
   }
 
   const daily = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
@@ -198,8 +243,9 @@ function processReport(raw: unknown, fromDate: string, toDate: string) {
     hours: Math.round(rest.hours * 10) / 10,
     daysLogged: dates.size,
   })).sort((a, b) => b.total - a.total);
+  const projectBreakdown = Object.values(projMap).sort((a, b) => b.total - a.total);
 
-  return { fromDate, toDate, totalRecords: records.length, overall, daily, employees };
+  return { fromDate, toDate, totalRecords: records.length, overall, daily, employees, projectBreakdown };
 }
 
 export default router;

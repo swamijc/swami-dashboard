@@ -148,6 +148,13 @@ function initSchema(db: DatabaseSync): void {
       workflow_run TEXT,
       run_id TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS timesheet_report_cache (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+      params TEXT
+    );
   `);
 
   // Seed default admin user if not exists
