@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Timesheet from './pages/Timesheet';
+import TimesheetReport from './pages/TimesheetReport';
 import TimeTracking from './pages/TimeTracking';
 import Admin from './pages/Admin';
 import Onboarding from './pages/Onboarding';
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="/timesheet" element={<ProtectedRoute adminOnly><Timesheet /></ProtectedRoute>} />
           <Route path="/timesheet/*" element={<ProtectedRoute adminOnly><Timesheet /></ProtectedRoute>} />
+          <Route path="/timesheet-report" element={<ProtectedRoute><TimesheetReport /></ProtectedRoute>} />
           <Route path="/tracking" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
           <Route path="/jira" element={<ProtectedRoute><Jira /></ProtectedRoute>} />
           <Route path="/jira/due-date" element={<ProtectedRoute><JiraDueDate /></ProtectedRoute>} />

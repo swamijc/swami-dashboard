@@ -5,7 +5,8 @@ import photonIcon from '../assets/icons/photon.png';
 
 const navItems = [
   { path: '/',           label: 'Dashboard', icon: '🏠' },
-  { path: '/timesheet',  label: 'Timesheet',  icon: '⏱️' },
+  { path: '/timesheet',       label: 'Timesheet',  icon: '⏱️' },
+  { path: '/timesheet-report', label: 'Timesheet Report', icon: '📄' },
   { path: '/tracking',   label: 'Time Tracking', icon: '📈' },
   { path: '/revenue',    label: 'Revenue',    icon: '💰', disabled: true },
   { path: '/jira',       label: 'JIRA',       icon: '🔀' },
@@ -46,7 +47,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <nav className="flex-1 py-4 space-y-1 px-3">
           {navItems.map(item => {
             if (item.adminOnly && user?.role !== 'admin') return null;
-            if (user?.role === 'viewer' && !['/', '/tracking', '/jira', '/onboarding', '/quality', '/release'].includes(item.path)) return null;
+            if (user?.role === 'viewer' && !['/', '/tracking', '/jira', '/onboarding', '/quality', '/release', '/timesheet-report'].includes(item.path)) return null;
             const active = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             return (
               <Link

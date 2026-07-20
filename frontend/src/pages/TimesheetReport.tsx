@@ -1,0 +1,305 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts';
+import api from '../api/client';
+
+// ── Colour palette ──────────────────────────────────────────────
+const COLORS = {
+  saved:     '#94a3b8', // slate-400
+  submitted: '#0072ce', // Photon blue
+  approved:  '#16a34a', // green-600
+  disputed:  '#dc2626', // red-600
+};
+const PIE_COLORS = [COLORS.saved, COLORS.submitted, COLORS.approved, COLORS.disputed];
+
+// ── Date helpers ─────────────────────────────────────────────────
+function localIso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function currentMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from: localIso(from), to: localIso(to) };
+}
+
+function previousMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const to   = new Date(now.getFullYear(), now.getMonth(), 0);
+  return { from: localIso(from), to: localIso(to) };
+}
+
+// ── Types ────────────────────────────────────────────────────────
+interface OverallStats { total: number; saved: number; submitted: number; approved: number; disputed: number; }
+interface DailyEntry   { date: string; saved: number; submitted: number; approved: number; disputed: number; total: number; }
+interface EmployeeEntry{ code: string; name: string; saved: number; submitted: number; approved: number; disputed: number; total: number; hours: number; daysLogged: number; }
+interface ReportData   { fromDate: string; toDate: string; totalRecords: number; overall: OverallStats; daily: DailyEntry[]; employees: EmployeeEntry[]; }
+
+// ── Sub-components ───────────────────────────────────────────────
+function KpiCard({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+      <div className="text-sm text-gray-500 dark:text-gray-400">{label}</div>
+      <div className="mt-1 text-3xl font-bold" style={{ color }}>{value.toLocaleString()}</div>
+    </div>
+  );
+}
+
+function fmt(date: string): string {
+  // YYYY-MM-DD → DD MMM
+  const parts = date.split('-');
+  if (parts.length !== 3) return date;
+  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+}
+
+// ── Main page ────────────────────────────────────────────────────
+export default function TimesheetReport() {
+  const init = currentMonthRange();
+  const [fromDate, setFromDate] = useState(init.from);
+  const [toDate,   setToDate]   = useState(init.to);
+  const [data,     setData]     = useState<ReportData | null>(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [empFilter, setEmpFilter] = useState('');
+
+  const fetchReport = useCallback(async (from: string, to: string) => {
+    setLoading(true);
+    setError('');
+    setData(null);
+    try {
+      const resp = await api.post('/timesheet-report/data', { fromDate: from, toDate: to });
+      setData(resp.data);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Failed to load report');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchReport(fromDate, toDate); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  function applyRange(from: string, to: string) {
+    setFromDate(from);
+    setToDate(to);
+    fetchReport(from, to);
+  }
+
+  const overall = data?.overall ?? { total: 0, saved: 0, submitted: 0, approved: 0, disputed: 0 };
+  const pieData = [
+    { name: 'Saved',     value: overall.saved,     color: COLORS.saved },
+    { name: 'Submitted', value: overall.submitted,  color: COLORS.submitted },
+    { name: 'Approved',  value: overall.approved,   color: COLORS.approved },
+    { name: 'Disputed',  value: overall.disputed,   color: COLORS.disputed },
+  ].filter(d => d.value > 0);
+
+  const filteredEmployees = (data?.employees ?? []).filter(e =>
+    !empFilter || e.name.toLowerCase().includes(empFilter.toLowerCase()) || e.code.includes(empFilter)
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Timesheet Report</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Daily submission analysis and individual breakdown from Photon Timetracker</p>
+        </div>
+        <a
+          href="https://timetracker.photon.com/timetracker/#/gen/report"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition hover:border-blue-500 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+        >
+          Open Timetracker ↗
+        </a>
+      </div>
+
+      {/* ── Date Range Controls ── */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">From</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={e => setFromDate(e.target.value)}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">To</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={e => setToDate(e.target.value)}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <button
+            onClick={() => fetchReport(fromDate, toDate)}
+            disabled={loading}
+            className="rounded-lg bg-[#0072ce] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#005eb8] disabled:opacity-50"
+          >
+            {loading ? 'Loading…' : 'Run Report'}
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { const r = currentMonthRange(); applyRange(r.from, r.to); }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 transition hover:border-blue-500 hover:text-blue-700 dark:border-gray-700 dark:text-gray-300"
+            >
+              Current Month
+            </button>
+            <button
+              onClick={() => { const r = previousMonthRange(); applyRange(r.from, r.to); }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 transition hover:border-blue-500 hover:text-blue-700 dark:border-gray-700 dark:text-gray-300"
+            >
+              Previous Month
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Error ── */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          {error}
+          {error.toLowerCase().includes('session') && (
+            <span> — go to <strong>Admin</strong> and save the Photon Track cookie.</span>
+          )}
+        </div>
+      )}
+
+      {/* ── KPI Cards ── */}
+      {data && (
+        <>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
+            <KpiCard label="Total Records"  value={overall.total}     color="#0f172a" />
+            <KpiCard label="Saved (Draft)"  value={overall.saved}     color={COLORS.saved} />
+            <KpiCard label="Submitted"      value={overall.submitted} color={COLORS.submitted} />
+            <KpiCard label="Approved"       value={overall.approved}  color={COLORS.approved} />
+            <KpiCard label="Disputed"       value={overall.disputed}  color={COLORS.disputed} />
+          </div>
+
+          {/* ── Charts row ── */}
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            {/* Overall status pie */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Overall Status Distribution</h2>
+              {pieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie data={pieData} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={2} label={(props: any) => `${props.name ?? ''} ${((props.percent ?? 0) * 100).toFixed(0)}%`}>
+                      {pieData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => (v != null ? Number(v).toLocaleString() : '0')} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="py-16 text-center text-sm text-gray-400">No data for this period</p>
+              )}
+            </div>
+
+            {/* Daily submission bar */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Daily Submissions</h2>
+              {data.daily.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={data.daily} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tickFormatter={fmt} tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip labelFormatter={(label) => fmt(String(label ?? ''))} />
+                    <Legend />
+                    <Bar dataKey="saved"     name="Saved"     fill={COLORS.saved}     stackId="a" />
+                    <Bar dataKey="submitted" name="Submitted" fill={COLORS.submitted} stackId="a" />
+                    <Bar dataKey="approved"  name="Approved"  fill={COLORS.approved}  stackId="a" />
+                    <Bar dataKey="disputed"  name="Disputed"  fill={COLORS.disputed}  stackId="a" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="py-16 text-center text-sm text-gray-400">No daily data for this period</p>
+              )}
+            </div>
+          </div>
+
+          {/* ── Individual Report ── */}
+          <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">Individual Report</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{data.fromDate} → {data.toDate} · {filteredEmployees.length} employees</p>
+              </div>
+              <input
+                type="search"
+                placeholder="Search by name or code…"
+                value={empFilter}
+                onChange={e => setEmpFilter(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-400">
+                    <th className="px-4 py-3">Employee</th>
+                    <th className="px-4 py-3 text-right">Saved</th>
+                    <th className="px-4 py-3 text-right">Submitted</th>
+                    <th className="px-4 py-3 text-right">Approved</th>
+                    <th className="px-4 py-3 text-right">Disputed</th>
+                    <th className="px-4 py-3 text-right">Total</th>
+                    <th className="px-4 py-3 text-right">Hours</th>
+                    <th className="px-4 py-3 text-right">Days</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEmployees.map(emp => (
+                    <tr key={emp.code} className="border-b border-gray-50 transition hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/40">
+                      <td className="px-4 py-2.5">
+                        <div className="font-medium text-gray-900 dark:text-white">{emp.name}</div>
+                        <div className="text-xs text-gray-400">{emp.code}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-gray-500">{emp.saved || '–'}</td>
+                      <td className="px-4 py-2.5 text-right font-medium text-[#0072ce]">{emp.submitted || '–'}</td>
+                      <td className="px-4 py-2.5 text-right font-medium text-green-600">{emp.approved || '–'}</td>
+                      <td className="px-4 py-2.5 text-right font-medium text-red-600">{emp.disputed || '–'}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold">{emp.total}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">{emp.hours > 0 ? emp.hours : '–'}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">{emp.daysLogged > 0 ? emp.daysLogged : '–'}</td>
+                    </tr>
+                  ))}
+                  {filteredEmployees.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">
+                        {data.totalRecords === 0 ? 'No timesheet records found for this period.' : 'No employees match your filter.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Loading skeleton ── */}
+      {loading && !data && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-5 gap-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+            ))}
+          </div>
+          <div className="h-72 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+        </div>
+      )}
+    </div>
+  );
+}

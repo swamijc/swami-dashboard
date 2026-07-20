@@ -13,6 +13,7 @@ import adminRouter from './routes/admin';
 import trackingRouter from './routes/tracking';
 import jiraRouter from './routes/jira';
 import releaseRouter from './routes/release';
+import timesheetReportRouter from './routes/timesheetReport';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -69,8 +70,9 @@ export function createApp() {
   app.use('/api/timesheet', timesheetRouter);
   app.use('/api/admin',     adminRouter);
   app.use('/api/tracking',  trackingRouter);
-  app.use('/api/jira',      jiraRouter);
-  app.use('/api/release',   releaseRouter);
+  app.use('/api/jira',              jiraRouter);
+  app.use('/api/release',            releaseRouter);
+  app.use('/api/timesheet-report',   timesheetReportRouter);
 
   // Health check
   app.get('/api/health', (_req, res) => {

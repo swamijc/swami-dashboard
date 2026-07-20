@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 
 const modules = [
   { title: 'Timesheet', icon: '⏱️', path: '/timesheet', desc: 'Photon & Boots KI timesheet entry, approval, and compliance', active: true },
+  { title: 'Timesheet Report', icon: '📄', path: '/timesheet-report', desc: 'Daily submission pie, overall saved/submitted/approved/disputed stats, and individual breakdown', active: true },
   { title: 'Time Tracking', icon: '📈', path: '/tracking', desc: 'Team in/out hours — 40hr / 40-50hr / 50+ hr weekly analysis', active: true },
   { title: 'Revenue Report', icon: '💰', path: '/revenue', desc: 'Revenue vs target, variance and team contribution reports', active: false },
   { title: 'JIRA Dashboard', icon: '🔀', path: '/jira', desc: 'Boots Mobile App open sprint Story/Bug report by resource and story points', active: true },
@@ -14,7 +15,7 @@ const modules = [
 export default function Home() {
   const { user } = useAuth();
   const visibleModules = user?.role === 'viewer'
-    ? modules.filter(module => ['/', '/tracking', '/jira', '/onboarding', '/quality', '/release'].includes(module.path))
+    ? modules.filter(module => ['/', '/tracking', '/jira', '/timesheet-report', '/onboarding', '/quality', '/release'].includes(module.path))
     : modules;
 
   return (
