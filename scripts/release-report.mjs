@@ -46,8 +46,8 @@ function pushDetails(name) {
 
 function testUrl(name) {
   if (name === 'dev') return process.env.RELEASE_DEV_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
-  if (name === 'qa') return process.env.RELEASE_QA_URL || null;
-  return process.env.RELEASE_PROD_URL || null;
+  if (name === 'qa') return process.env.RELEASE_QA_URL || 'https://github.com/swamijc/swami-dashboard/actions';
+  return process.env.RELEASE_PROD_URL || 'https://github.com/swamijc/swami-dashboard/releases';
 }
 
 const report = {

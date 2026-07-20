@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-20T20:01:32.015Z",
+  "generatedAt": "2026-07-20T20:17:18.132Z",
   "releaseVersion": "local-local-local",
   "currentStage": "DEV",
   "overallStatus": "in_progress",
@@ -19,7 +19,7 @@
       "testUrl": "http://localhost:5173",
       "push": {
         "version": "local-local-local",
-        "pushedAt": "2026-07-20T20:01:32.015Z",
+        "pushedAt": "2026-07-20T20:17:18.132Z",
         "pushedBy": "local",
         "branch": "local",
         "commitSha": "local",
@@ -32,7 +32,7 @@
       "status": "pending",
       "gate": "automatic after DEV passes",
       "description": "Runs only after DEV succeeds and repeats the validation gates before production promotion.",
-      "testUrl": null,
+      "testUrl": "https://github.com/swamijc/swami-dashboard/actions",
       "push": null
     },
     {
@@ -40,7 +40,7 @@
       "status": "pending",
       "gate": "manual approval after QA passes",
       "description": "Runs only after QA succeeds and the GitHub prod environment approval is granted.",
-      "testUrl": null,
+      "testUrl": "https://github.com/swamijc/swami-dashboard/releases",
       "push": null
     }
   ],

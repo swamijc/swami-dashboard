@@ -67,6 +67,8 @@ jobs:
           cache: pip
 
       - name: Run QA validation
+        env:
+          RELEASE_QA_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: bash scripts/ci-stage.sh qa
 
   prod:
