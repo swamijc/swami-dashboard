@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -86,6 +86,8 @@ export default function TimesheetReport() {
   const [loading,          setLoading]          = useState(false);
   const [error,            setError]            = useState('');
   const [empFilter,        setEmpFilter]        = useState('');
+  const [sortCol,          setSortCol]          = useState<'name'|'saved'|'submitted'|'approved'|'disputed'|'total'|'hours'|'daysLogged'>('total');
+  const [sortDir,          setSortDir]          = useState<'asc'|'desc'>('desc');
   const [selectedAccount,  setSelectedAccount]  = useState('all');
   const [selectedProjects, setSelectedProjects] = useState<string[]>(ALL_PROJECTS.map(p => p.id));
 
@@ -193,9 +195,25 @@ export default function TimesheetReport() {
     ).filter(d => d.value > 0);
   })();
 
-  const filteredEmployees = (data?.employees ?? []).filter(e =>
-    !empFilter || e.name.toLowerCase().includes(empFilter.toLowerCase()) || e.code.includes(empFilter)
-  );
+  const filteredEmployees = useMemo(() => {
+    const filtered = (data?.employees ?? []).filter(e =>
+      !empFilter || e.name.toLowerCase().includes(empFilter.toLowerCase()) || e.code.includes(empFilter)
+    );
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (sortCol === 'name') {
+        cmp = a.name.localeCompare(b.name);
+      } else {
+        cmp = (a[sortCol] as number) - (b[sortCol] as number);
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [data?.employees, empFilter, sortCol, sortDir]);
+
+  function handleSort(col: typeof sortCol) {
+    if (col === sortCol) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('desc'); }
+  }
 
   return (
     <div className="space-y-6">
@@ -439,14 +457,27 @@ export default function TimesheetReport() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-400">
-                    <th className="px-4 py-3">Employee</th>
-                    <th className="px-4 py-3 text-right">Saved</th>
-                    <th className="px-4 py-3 text-right">Submitted</th>
-                    <th className="px-4 py-3 text-right">Approved</th>
-                    <th className="px-4 py-3 text-right">Disputed</th>
-                    <th className="px-4 py-3 text-right">Total</th>
-                    <th className="px-4 py-3 text-right">Hours</th>
-                    <th className="px-4 py-3 text-right">Days</th>
+                    {([
+                      { key: 'name',       label: 'Employee',  right: false },
+                      { key: 'saved',      label: 'Saved',     right: true  },
+                      { key: 'submitted',  label: 'Submitted', right: true  },
+                      { key: 'approved',   label: 'Approved',  right: true  },
+                      { key: 'disputed',   label: 'Disputed',  right: true  },
+                      { key: 'total',      label: 'Total',     right: true  },
+                      { key: 'hours',      label: 'Hours',     right: true  },
+                      { key: 'daysLogged', label: 'Days',      right: true  },
+                    ] as const).map(col => (
+                      <th key={col.key}
+                        className={`px-4 py-3 ${col.right ? 'text-right' : ''} cursor-pointer select-none whitespace-nowrap hover:text-gray-900 dark:hover:text-gray-100`}
+                        onClick={() => handleSort(col.key)}>
+                        <span className="inline-flex items-center gap-1">
+                          {col.label}
+                          {sortCol === col.key
+                            ? <span className="text-[#0072ce]">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                            : <span className="opacity-25">↕</span>}
+                        </span>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
