@@ -21,6 +21,16 @@ const ACCOUNTS = [
       { id: '13087', label: 'Boots Staffing' },
     ],
   },
+  {
+    id: 'timeoff',
+    name: 'Time Off',
+    code: '0016F00004AtTC8QAN',
+    // Time Off data is fetched via getEmployeeReport (not projectReport)
+    // and identified by projectCode 99995 in the API response
+    projects: [
+      { id: '99995', label: 'Time Off' },
+    ],
+  },
 ];
 const ALL_PROJECTS = ACCOUNTS.flatMap(a => a.projects);
 
@@ -131,11 +141,14 @@ export default function TimesheetReport() {
     setError('');
     try {
       const acc = ACCOUNTS.find(a => a.id === accountId);
+      // Include Time Off (via getEmployeeReport) when 'all' or 'timeoff' is selected
+      const includeTimeOff = accountId === 'all' || accountId === 'timeoff';
       const resp = await api.post('/timesheet-report/data', {
         fromDate: from,
         toDate: to,
         projectIds: projIds.length > 0 ? projIds.join(',') : undefined,
         accountCode: acc?.code,
+        includeTimeOff,
       });
       setData(resp.data);
       setError(''); // clear any previous error on success

@@ -18,8 +18,58 @@ const PHOTON_BASE = 'https://timetracker.photon.com/timetracker';
 // the API requires the internal numeric IDs below.
 const DEFAULT_PROJECT_IDS  = '6347,5284,5704,4545';
 const DEFAULT_ACCOUNT_CODE = '0016F00004AtTC8QAN';
+const TIME_OFF_PROJECT_CODE = '99995'; // Human-readable projectCode returned in API responses
 // Skip corporate TLS cert (same pattern as time-tracking service)
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
+// Shared request headers for all Photon API calls
+function photonHeaders(cookie: string) {
+  return {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/plain, */*',
+    Cookie: cookie,
+    Host: 'timetracker.photon.com',
+    Origin: 'https://timetracker.photon.com',
+    Referer: 'https://timetracker.photon.com/timetracker/',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
+    'Cache-Control': 'no-cache, no-store',
+    DNT: '1',
+  };
+}
+
+// Fetch Time Off entries for all employees using getEmployeeReport (20 at a time in parallel)
+async function fetchTimeOffRecords(
+  cookie: string, employeeCodes: string, fromDate: string, toDate: string
+): Promise<any[]> {
+  const codes = employeeCodes.split(',').map(c => parseInt(c.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+  const CONCURRENCY = 20;
+  const timeOffRecords: any[] = [];
+
+  for (let i = 0; i < codes.length; i += CONCURRENCY) {
+    const batch = codes.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.all(batch.map(async (empCode) => {
+      try {
+        const r = await axios.post(
+          `${PHOTON_BASE}/getEmployeeReport?time-stamp=${Date.now()}`,
+          { employeeCode: empCode, status: 0, fromDate, toDate },
+          {
+            httpsAgent,
+            headers: photonHeaders(cookie),
+            timeout: 20_000,
+            validateStatus: (s: number) => s < 500,
+          }
+        );
+        const d = r.data;
+        if (typeof d === 'string' && d.trim().startsWith('<')) return []; // expired
+        const recs: any[] = Array.isArray(d?.data) ? d.data : [];
+        return recs.filter((rec: any) => String(rec.projectCode ?? '') === TIME_OFF_PROJECT_CODE);
+      } catch { return []; }
+    }));
+    batchResults.forEach(recs => timeOffRecords.push(...recs));
+  }
+
+  return timeOffRecords;
+}
 
 function getSessionCookie(): string {
   const cfg = getDb().prepare(
@@ -69,9 +119,10 @@ router.get('/cached', requireAuth, (req: Request, res: Response) => {
 router.post('/data', requireAuth, async (req: Request, res: Response) => {
   const {
     fromDate, toDate,
-    projectIds: reqProjectIds,  // optional comma-separated override from frontend
-    accountCode: reqAccountCode,  // optional override from frontend
-  } = req.body as { fromDate?: string; toDate?: string; projectIds?: string; accountCode?: string };
+    projectIds: reqProjectIds,
+    accountCode: reqAccountCode,
+    includeTimeOff,  // boolean — if true also fetch Time Off via getEmployeeReport
+  } = req.body as { fromDate?: string; toDate?: string; projectIds?: string; accountCode?: string; includeTimeOff?: boolean };
 
   if (!fromDate || !toDate) {
     res.status(400).json({ error: 'fromDate and toDate are required' });
@@ -101,17 +152,7 @@ router.post('/data', requireAuth, async (req: Request, res: Response) => {
       payload,
       {
         httpsAgent,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json, text/plain, */*',
-          Cookie: cookie,
-          Host: 'timetracker.photon.com',
-          Origin: 'https://timetracker.photon.com',
-          Referer: 'https://timetracker.photon.com/timetracker/',
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
-          'Cache-Control': 'no-cache, no-store',
-          DNT: '1',
-        },
+        headers: photonHeaders(cookie),
         timeout: 120_000,
         maxContentLength: 20 * 1024 * 1024, // 20 MB
         validateStatus: (s: number) => s < 500,
@@ -125,7 +166,18 @@ router.post('/data', requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
-    const processed = processReport(response.data, fromDate, toDate);
+    // Optionally fetch Time Off entries via per-employee getEmployeeReport calls
+    let rawData: unknown = response.data;
+    if (includeTimeOff && employeeCode) {
+      const timeOffRecs = await fetchTimeOffRecords(cookie, employeeCode, fromDate!, toDate!);
+      if (timeOffRecs.length > 0) {
+        // Merge Time Off records with Boots UK records
+        const bootsRecs: any[] = Array.isArray((rawData as any)?.data) ? (rawData as any).data : [];
+        rawData = { ...response.data as any, data: [...bootsRecs, ...timeOffRecs] };
+      }
+    }
+
+    const processed = processReport(rawData, fromDate!, toDate!);
 
     // Persist to cache so future page loads can show the last result
     try {
