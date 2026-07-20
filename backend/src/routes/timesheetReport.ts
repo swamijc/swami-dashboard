@@ -9,12 +9,14 @@ const router = Router();
 
 const PHOTON_BASE = 'https://timetracker.photon.com/timetracker';
 // Projects for Boots UK Ltd. and Time Off accounts
-// 13755 – Mobile App Condor Squad (Mar'26-May'26)
-// 12667 – Boots Mobile App'23
-// 11925 – GCB Support (Boots International)
-// 13087 – Boots Staffing
-// 99995 – Time Off
-const DEFAULT_PROJECT_IDS  = '13755,12667,11925,13087,99995';
+// Photon internal API IDs (these differ from the human-readable project numbers shown in the UI)
+// 6347 – Boots UK Ltd. project (maps to Mobile App Condor Squad / Mobile App'23 etc.)
+// 5284 – Boots UK Ltd. project
+// 5704 – Boots UK Ltd. project
+// 4545 – Boots UK Ltd. project
+// The human-readable project numbers (13755, 12667, 11925, 13087, 99995) are UI labels;
+// the API requires the internal numeric IDs below.
+const DEFAULT_PROJECT_IDS  = '6347,5284,5704,4545';
 const DEFAULT_ACCOUNT_CODE = '0016F00004AtTC8QAN';
 // Skip corporate TLS cert (same pattern as time-tracking service)
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
@@ -161,6 +163,7 @@ interface ProjectEntry {
 
 function processReport(raw: unknown, fromDate: string, toDate: string) {
   // Accept various response envelope shapes from Photon API
+  // Confirmed shape: { data: [...], statusCode, status }
   const records: any[] = Array.isArray(raw) ? raw
     : Array.isArray((raw as any)?.data)          ? (raw as any).data
     : Array.isArray((raw as any)?.records)       ? (raw as any).records
@@ -175,34 +178,41 @@ function processReport(raw: unknown, fromDate: string, toDate: string) {
   const projMap: Record<string, ProjectEntry> = {};
 
   for (const r of records) {
+    // Actual Photon API fields (confirmed from live response):
+    // statusCode, status, timesheetDate, employeeCode, employeeName,
+    // projectCode, projectName, accountCode, accountName, totalHours,
+    // submittedBy, submittedDate, approvedBy, approvedCode
+    // NOTE: statusCode is always 0; the real status is in the 'status' text field.
     const status = String(
-      r.status ?? r.Status ?? r.timesheetStatus ?? r.statusCode ?? r.approvalStatus ?? ''
-    ).trim();
+      r.status ?? r.Status ?? r.timesheetStatus ?? r.approvalStatus ?? ''
+    ).trim().toLowerCase();
     const rawDate: string = (
-      r.date ?? r.Date ?? r.workDate ?? r.timesheetDate ?? r.logDate ?? r.entryDate ?? ''
+      r.timesheetDate ?? r.date ?? r.Date ?? r.workDate ?? r.logDate ?? r.entryDate ?? ''
     ).toString();
-    const date = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+    const date = rawDate.includes('T') ? rawDate.split('T')[0]
+      : rawDate.includes(' ')          ? rawDate.split(' ')[0]
+      : rawDate;
     const code = String(
-      r.employeeCode ?? r.employeeId ?? r.empCode ?? r.empId ?? r.resourceCode ?? ''
+      r.employeeCode ?? r.empCode ?? r.empId ?? r.resourceCode ?? ''
     ).trim();
     const name = String(
       r.employeeName ?? r.empName ?? r.name ?? r.resourceName ?? r.displayName ?? code
     ).trim();
     const hours = parseFloat(
-      r.hours ?? r.loggedHours ?? r.totalHours ?? r.duration ?? r.actualHours ?? 0
+      r.totalHours ?? r.hours ?? r.loggedHours ?? r.duration ?? r.actualHours ?? 0
     ) || 0;
 
-    if      (status === '1') overall.saved++;
-    else if (status === '2') overall.submitted++;
-    else if (status === '3') overall.approved++;
-    else if (status === '4') overall.disputed++;
+    if      (status === 'saved')     overall.saved++;
+    else if (status === 'submitted') overall.submitted++;
+    else if (status === 'approved')  overall.approved++;
+    else if (status === 'disputed')  overall.disputed++;
 
     if (date) {
       if (!dailyMap[date]) dailyMap[date] = { date, saved: 0, submitted: 0, approved: 0, disputed: 0, total: 0 };
-      if      (status === '1') dailyMap[date].saved++;
-      else if (status === '2') dailyMap[date].submitted++;
-      else if (status === '3') dailyMap[date].approved++;
-      else if (status === '4') dailyMap[date].disputed++;
+      if      (status === 'saved')     dailyMap[date].saved++;
+      else if (status === 'submitted') dailyMap[date].submitted++;
+      else if (status === 'approved')  dailyMap[date].approved++;
+      else if (status === 'disputed')  dailyMap[date].disputed++;
       dailyMap[date].total++;
     }
 
@@ -210,29 +220,29 @@ function processReport(raw: unknown, fromDate: string, toDate: string) {
       if (!empMap[code]) {
         empMap[code] = { code, name, saved: 0, submitted: 0, approved: 0, disputed: 0, total: 0, hours: 0, daysLogged: 0, dates: new Set() };
       }
-      if      (status === '1') empMap[code].saved++;
-      else if (status === '2') empMap[code].submitted++;
-      else if (status === '3') empMap[code].approved++;
-      else if (status === '4') empMap[code].disputed++;
+      if      (status === 'saved')     empMap[code].saved++;
+      else if (status === 'submitted') empMap[code].submitted++;
+      else if (status === 'approved')  empMap[code].approved++;
+      else if (status === 'disputed')  empMap[code].disputed++;
       empMap[code].total++;
       empMap[code].hours += hours;
       if (date) empMap[code].dates.add(date);
     }
 
-    // Project-level aggregation
+    // Project-level aggregation — use confirmed API field names
     const projId = String(
-      r.projectId ?? r.project_id ?? r.projectCode ?? r.projectNo ?? r.projectNumber ?? ''
+      r.projectCode ?? r.projectId ?? r.project_id ?? r.projectNo ?? ''
     ).trim();
     const projName = String(
-      r.projectName ?? r.project_name ?? r.projectTitle ?? r.projectDesc ?? projId
+      r.projectName ?? r.project_name ?? r.projectTitle ?? projId
     ).trim();
     if (projId || projName) {
       const key = projId || projName;
       if (!projMap[key]) projMap[key] = { projectId: projId, projectName: projName || projId, saved: 0, submitted: 0, approved: 0, disputed: 0, total: 0 };
-      if      (status === '1') projMap[key].saved++;
-      else if (status === '2') projMap[key].submitted++;
-      else if (status === '3') projMap[key].approved++;
-      else if (status === '4') projMap[key].disputed++;
+      if      (status === 'saved')     projMap[key].saved++;
+      else if (status === 'submitted') projMap[key].submitted++;
+      else if (status === 'approved')  projMap[key].approved++;
+      else if (status === 'disputed')  projMap[key].disputed++;
       projMap[key].total++;
     }
   }

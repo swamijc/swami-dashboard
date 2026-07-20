@@ -6,6 +6,9 @@ import {
 import api from '../api/client';
 
 // ── Account & Project master data ─────────────────────────────
+// projectCode values returned by the Photon API are the human-readable IDs
+// (13755, 12667, etc.). The API parameter 'projectId' uses different internal
+// IDs (6347, 5284, etc.) set in the backend DEFAULT_PROJECT_IDS constant.
 const ACCOUNTS = [
   {
     id: 'boots',
@@ -16,14 +19,6 @@ const ACCOUNTS = [
       { id: '12667', label: "Boots Mobile App'23" },
       { id: '11925', label: 'GCB Support (Boots International)' },
       { id: '13087', label: 'Boots Staffing' },
-    ],
-  },
-  {
-    id: 'timeoff',
-    name: 'Time Off',
-    code: '0016F00004AtTC8QAN',
-    projects: [
-      { id: '99995', label: 'Time Off' },
     ],
   },
 ];
