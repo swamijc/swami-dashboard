@@ -166,6 +166,57 @@ async function runBootsKISubmit(resource: 'KSWA1' | 'VILP1', service: string): P
   }
 }
 
+// ── Startup catch-up: run missed jobs if backend started after cron time ───
+// Called once from initScheduler(). Handles the case where the backend was
+// restarted or the Mac woke up after 08:15 UTC on a weekday.
+async function scheduleMissedCatchup(): Promise<void> {
+  const now = new Date();
+  const dayOfWeek = now.getUTCDay(); // 0=Sun … 6=Sat
+  const isWeekday  = dayOfWeek >= 1 && dayOfWeek <= 5;
+  const utcHour    = now.getUTCHours();
+  const utcMin     = now.getUTCMinutes();
+  const pastCron   = utcHour > 8 || (utcHour === 8 && utcMin >= 15);
+
+  if (!isWeekday || !pastCron) {
+    console.log('[CRON][CATCHUP] No catch-up needed (not a weekday past 08:15 UTC)');
+    return;
+  }
+
+  console.log('[CRON][CATCHUP] Weekday past 08:15 UTC — checking for missed jobs...');
+
+  // Allow Python services time to finish starting up
+  await new Promise(r => setTimeout(r, 15000));
+
+  // Each function has its own internal duplicate guard — safe to call unconditionally
+  await runPhotonSwamiEntry();
+  await runPhotonPrasannaEntry();
+  await runPhotonApproval('Startup Catch-up');
+
+  // PMO: runs 10 s after swami entry (its own guard checks today's swami success)
+  await new Promise(r => setTimeout(r, 10000));
+  await runPhotonSwamiPmoSubmit();
+
+  // Boots KI runs Monday only — include in catch-up when today is Monday (UTC)
+  if (dayOfWeek === 1) {
+    const bootsSwami = getDb().prepare(
+      `SELECT id FROM job_runs WHERE service_name='boots_ki_swami' AND status='success' AND is_dry_run=0 AND date(started_at)=date('now') LIMIT 1`
+    ).get();
+    const bootsPv = getDb().prepare(
+      `SELECT id FROM job_runs WHERE service_name='boots_ki_pv' AND status='success' AND is_dry_run=0 AND date(started_at)=date('now') LIMIT 1`
+    ).get();
+    if (!bootsSwami) {
+      console.log('[CRON][CATCHUP] boots_ki_swami missed today (Monday) — running now...');
+      await runBootsKISubmit('KSWA1', 'boots_ki_swami');
+    }
+    if (!bootsPv) {
+      console.log('[CRON][CATCHUP] boots_ki_pv missed today (Monday) — running now...');
+      await runBootsKISubmit('VILP1', 'boots_ki_pv');
+    }
+  }
+
+  console.log('[CRON][CATCHUP] Catch-up complete');
+}
+
 export function initScheduler(): void {
   // ── Photon Swami Entry: Mon–Fri 1:45 PM IST (08:15 UTC) ────────
   cron.schedule('15 8 * * 1-5', () => {
@@ -219,4 +270,9 @@ export function initScheduler(): void {
   console.log('[CRON]   Approval Run2:  Daily   14:30 UTC (8:00 PM IST)');
   console.log('[CRON]   KI Swami:       Monday  08:15 UTC (1:45 PM IST)');
   console.log('[CRON]   KI PV:          Monday  08:15 UTC (1:45 PM IST)');
+
+  // Run catch-up in background — detects missed jobs if backend started late
+  scheduleMissedCatchup().catch(err =>
+    console.error('[CRON][CATCHUP] Unexpected error:', err)
+  );
 }

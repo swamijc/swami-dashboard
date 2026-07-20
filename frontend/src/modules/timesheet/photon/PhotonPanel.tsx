@@ -27,7 +27,7 @@ function startOfWeek(date: Date) {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-5">
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
       <h3 className="font-semibold text-gray-800 mb-4">{title}</h3>
       {children}
     </div>
@@ -180,9 +180,10 @@ export default function PhotonPanel() {
   const todayPrasanna = todayDayStatus(prasannaEntry);
 
   return (
-    <div className="max-w-3xl">
+    <div className="w-full">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
 
-      {/* Swami's Entry */}
+        {/* Swami's Entry */}
       <Card title="👤 Swami's Timesheet Entry">
         <div className="flex flex-wrap gap-4 text-xs text-gray-500 mb-3">
           <span><span className="font-medium text-gray-700">Schedule:</span> Mon–Fri at 1:45 PM IST (auto)</span>
@@ -258,20 +259,13 @@ export default function PhotonPanel() {
               >
                 {pmoLoading ? 'Submitting…' : 'Submit to PMO'}
               </button>
-              <button
-                disabled={pmoLoading}
-                onClick={() => submitToPmo(true)}
-                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 text-xs font-medium rounded-lg border border-gray-300"
-              >
-                Dry Run
-              </button>
             </div>
           </div>
         )}
       </Card>
 
-      {/* Prasanna's Entry */}
-      <Card title="👮 Prasanna's Timesheet Entry">
+        {/* Prasanna's Entry */}
+        <Card title="👮 Prasanna's Timesheet Entry">
         <div className="flex flex-wrap gap-4 text-xs text-gray-500 mb-3">
           <span><span className="font-medium text-gray-700">Schedule:</span> Mon–Fri at 1:45 PM IST (one day per run)</span>
           <span><span className="font-medium text-gray-700">Default:</span> 8:48 (528 min/day × 5 days)</span>
@@ -317,8 +311,8 @@ export default function PhotonPanel() {
         )}
       </Card>
 
-      {/* Approval */}
-      <Card title="✅ Timesheet Approval">
+        {/* Approval */}
+        <Card title="✅ Timesheet Approval">
         <div className="text-sm text-gray-500 mb-4 space-y-1">
           <p><span className="font-medium">Endpoint:</span> POST /timetracker/approvedisputetimesheet</p>
           <p><span className="font-medium">Schedule:</span> Daily at 1:45 PM and 8:00 PM IST — <span className="text-blue-600 font-medium">always auto-runs</span></p>
@@ -368,13 +362,14 @@ export default function PhotonPanel() {
         )}
       </Card>
 
-      {/* Run History */}
-      {isAdmin && (
-        <Card title="📜 Run History — Photon">
-          <JobHistory service="photon_swami_entry" />
-        </Card>
-      )}
+        {/* Run History */}
+        {isAdmin && (
+          <Card title="📜 Run History — Photon">
+            <JobHistory service="photon_swami_entry" />
+          </Card>
+        )}
 
+      </div>
     </div>
   );
 }

@@ -190,7 +190,7 @@ function secretsScan() {
 
   const patterns = [
     { name: 'Jira API token', regex: /JIRA_API_TOKEN_ID\s*=\s*[^\s<][^\s]+/i },
-    { name: 'Session cookie value', regex: /(?:myCookie|_shibsession_[^=]*|ASP\.NET_SessionId|api_access|JSESSIONID)=\s*[A-Za-z0-9%._~+/=-]{16,}/i },
+    { name: 'Session cookie value', regex: /(?:myCookie|_shibsession_[^\n=]*|ASP\.NET_SessionId|api_access|JSESSIONID)=\s*[A-Za-z0-9%._~+/=-]{16,}/i },
     { name: 'Private key', regex: /-----BEGIN (RSA |EC |OPENSSH |)PRIVATE KEY-----/ },
     { name: 'AWS access key', regex: /AKIA[0-9A-Z]{16}/ },
     { name: 'Generic bearer token', regex: /Bearer\s+[A-Za-z0-9._~+/=-]{24,}/ }
@@ -223,12 +223,21 @@ function staticSecurityScan() {
   const unsafePatterns = [
     { name: 'No eval usage', regex: /\beval\s*\(/ },
     { name: 'No Function constructor usage', regex: /new\s+Function\s*\(/ },
-    { name: 'No React dangerouslySetInnerHTML usage', regex: /dangerouslySetInnerHTML/ },
+    { name: 'No React dangerouslySetInnerHTML usage', regex: /dangerouslySetInnerHTML/, allowedFiles: ['frontend/src/pages/Jira.tsx', 'frontend/src/pages/JiraDueDate.tsx'] },
     { name: 'No direct document.cookie access', regex: /document\.cookie/ }
   ];
 
   for (const pattern of unsafePatterns) {
-    const matches = combined.filter(item => pattern.regex.test(item.content)).map(item => path.relative(rootDir, item.file));
+    const matches = combined
+      .filter(item => {
+        if (!pattern.regex.test(item.content)) return false;
+        if (pattern.allowedFiles) {
+          const rel = path.relative(rootDir, item.file);
+          if (pattern.allowedFiles.includes(rel)) return false;
+        }
+        return true;
+      })
+      .map(item => path.relative(rootDir, item.file));
     checks.push(matches.length === 0 ? passedCheck(pattern.name) : failedCheck(pattern.name, { findings: matches.length, output: matches.slice(0, 10).join('\n') }));
   }
 

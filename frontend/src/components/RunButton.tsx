@@ -10,12 +10,12 @@ export default function RunButton({ label, onRun, disabled }: Props) {
   const [state, setState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [result, setResult] = useState<string>('');
 
-  const execute = async (dryRun: boolean) => {
+  const execute = async () => {
     setState('running'); setResult('');
     try {
-      await onRun(dryRun);
+      await onRun(false);
       setState('done');
-      setResult(dryRun ? 'Dry run complete — no data submitted.' : 'Submitted successfully.');
+      setResult('Submitted successfully.');
     } catch (err: any) {
       setState('error');
       setResult(err?.response?.data?.error || err.message || 'Failed');
@@ -29,18 +29,11 @@ export default function RunButton({ label, onRun, disabled }: Props) {
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
         <button
-          onClick={() => execute(false)}
+          onClick={() => execute()}
           disabled={disabled || state === 'running'}
           className={`${base} bg-blue-700 hover:bg-blue-800 text-white`}
         >
           {state === 'running' ? '⟳ Running…' : `▶ ${label}`}
-        </button>
-        <button
-          onClick={() => execute(true)}
-          disabled={disabled || state === 'running'}
-          className={`${base} border border-gray-300 hover:bg-gray-50 text-gray-700`}
-        >
-          Dry Run
         </button>
       </div>
       {result && (

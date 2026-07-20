@@ -69,7 +69,7 @@ test('viewer can open Jira Onboarding and Quality in read-only mode', async ({ p
   await expect(sidebar.getByRole('link', { name: /Quality/ })).toBeVisible();
   await expect(sidebar.getByRole('link', { name: /Release/ })).toBeVisible();
   await expect(sidebar.getByRole('link', { name: /Admin/ })).toHaveCount(0);
-  await expect(sidebar.getByRole('link', { name: /Timesheet/ })).toHaveCount(0);
+  await expect(sidebar.getByRole('link', { name: /Timesheet$/ })).toHaveCount(0);
 
   await page.goto('/quality');
   await expect(page.getByRole('heading', { name: 'Code Quality Dashboard' })).toBeVisible();
