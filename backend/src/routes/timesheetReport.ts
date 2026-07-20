@@ -8,7 +8,13 @@ import { decrypt } from '../crypto/encrypt';
 const router = Router();
 
 const PHOTON_BASE = 'https://timetracker.photon.com/timetracker';
-const DEFAULT_PROJECT_IDS = '6347,5284,5704,4545';
+// Projects for Boots UK Ltd. and Time Off accounts
+// 13755 – Mobile App Condor Squad (Mar'26-May'26)
+// 12667 – Boots Mobile App'23
+// 11925 – GCB Support (Boots International)
+// 13087 – Boots Staffing
+// 99995 – Time Off
+const DEFAULT_PROJECT_IDS  = '13755,12667,11925,13087,99995';
 const DEFAULT_ACCOUNT_CODE = '0016F00004AtTC8QAN';
 // Skip corporate TLS cert (same pattern as time-tracking service)
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
