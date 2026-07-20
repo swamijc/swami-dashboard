@@ -98,6 +98,8 @@ export default function TimesheetReport() {
   const [empFilter,        setEmpFilter]        = useState('');
   const [sortCol,          setSortCol]          = useState<'name'|'saved'|'submitted'|'approved'|'disputed'|'total'|'hours'|'daysLogged'>('total');
   const [sortDir,          setSortDir]          = useState<'asc'|'desc'>('desc');
+  const [page,             setPage]             = useState(1);
+  const PAGE_SIZE = 10;
   const [selectedAccount,  setSelectedAccount]  = useState('all');
   const [selectedProjects, setSelectedProjects] = useState<string[]>(ALL_PROJECTS.map(p => p.id));
 
@@ -226,6 +228,29 @@ export default function TimesheetReport() {
   function handleSort(col: typeof sortCol) {
     if (col === sortCol) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortCol(col); setSortDir('desc'); }
+    setPage(1);
+  }
+
+  // Reset page on filter change
+  useEffect(() => { setPage(1); }, [empFilter, sortCol, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / PAGE_SIZE));
+  const pagedEmployees = filteredEmployees.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  function downloadCSV() {
+    const headers = ['Employee', 'Code', 'Saved', 'Submitted', 'Approved', 'Disputed', 'Total', 'Hours', 'Days'];
+    const rows = filteredEmployees.map(e => [
+      `"${e.name.replace(/"/g, '""')}"`, e.code,
+      e.saved, e.submitted, e.approved, e.disputed, e.total, e.hours, e.daysLogged,
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `timesheet-report-${data?.fromDate}-${data?.toDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -473,19 +498,34 @@ export default function TimesheetReport() {
 
           {/* ── Individual Report ── */}
           <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+            {/* Header */}
             <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800">
               <div>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">Individual Report</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{data.fromDate} → {data.toDate} · {filteredEmployees.length} employees</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {data.fromDate} → {data.toDate} · {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''}
+                </p>
               </div>
-              <input
-                type="search"
-                placeholder="Search by name or code…"
-                value={empFilter}
-                onChange={e => setEmpFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="search"
+                  placeholder="Search by name or code…"
+                  value={empFilter}
+                  onChange={e => setEmpFilter(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={downloadCSV}
+                  disabled={filteredEmployees.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-blue-500 hover:text-blue-700 disabled:opacity-40 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                >
+                  ⬇ Download CSV
+                </button>
+              </div>
             </div>
+
+            {/* Table — fixed height shows 10 rows, scrollable */}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -514,7 +554,7 @@ export default function TimesheetReport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEmployees.map(emp => (
+                  {pagedEmployees.map(emp => (
                     <tr key={emp.code} className="border-b border-gray-50 transition hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/40">
                       <td className="px-4 py-2.5">
                         <div className="font-medium text-gray-900 dark:text-white">{emp.name}</div>
@@ -529,7 +569,7 @@ export default function TimesheetReport() {
                       <td className="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">{emp.daysLogged > 0 ? emp.daysLogged : '–'}</td>
                     </tr>
                   ))}
-                  {filteredEmployees.length === 0 && (
+                  {pagedEmployees.length === 0 && (
                     <tr>
                       <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">
                         {data.totalRecords === 0 ? 'No timesheet records found for this period.' : 'No employees match your filter.'}
@@ -539,6 +579,31 @@ export default function TimesheetReport() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination footer */}
+            {filteredEmployees.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 dark:border-gray-800">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredEmployees.length)} of {filteredEmployees.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => setPage(1)}       disabled={page === 1}         className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-800">«</button>
+                  <button type="button" onClick={() => setPage(p => p - 1)} disabled={page === 1}      className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-800">‹</button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const half = Math.floor(Math.min(5, totalPages) / 2);
+                    const start = Math.max(1, Math.min(page - half, totalPages - Math.min(5, totalPages) + 1));
+                    return start + i;
+                  }).map(n => (
+                    <button key={n} type="button" onClick={() => setPage(n)}
+                      className={`rounded px-2.5 py-1 text-xs font-medium transition ${n === page ? 'bg-[#0072ce] text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'}`}>
+                      {n}
+                    </button>
+                  ))}
+                  <button type="button" onClick={() => setPage(p => p + 1)} disabled={page === totalPages} className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-800">›</button>
+                  <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-800">»</button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
