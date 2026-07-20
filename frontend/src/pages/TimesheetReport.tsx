@@ -486,7 +486,7 @@ export default function TimesheetReport() {
             <KpiCard label="Disputed"       value={overall.disputed}  color={COLORS.disputed} />
           </div>
 
-          {/* ── Charts — 2 × 2 grid, larger size ── */}
+          {/* ── Charts — top row 2-col, bottom full-width bar ── */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {/* 1. Overall Status */}
             <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
@@ -530,43 +530,38 @@ export default function TimesheetReport() {
               )}
             </div>
 
-            {/* 3. Project Distribution */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            {/* 3. Project Distribution — full-width stacked bar (spans both columns) */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 lg:col-span-2 dark:border-gray-800 dark:bg-gray-900">
               <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Project Distribution</h2>
-              {projectPie.length > 0 ? (
+              {selectedProjectBreakdown.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
-                  <PieChart>
-                    <Pie data={projectPie} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={120} innerRadius={60} paddingAngle={2} label={(props: any) => `${((props.percent ?? 0) * 100).toFixed(0)}%`}>
-                      {projectPie.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v) => (v != null ? Number(v).toLocaleString() : '0')} />
+                  <BarChart
+                    data={selectedProjectBreakdown.map(p => {
+                      const acc = ACCOUNTS.find(a => a.projects.some(pr => pr.id === p.projectId || pr.id === p.projectName));
+                      const proj = acc?.projects.find(pr => pr.id === p.projectId || pr.id === p.projectName);
+                      return {
+                        name: proj?.label ?? p.projectName ?? p.projectId,
+                        saved:     p.saved,
+                        submitted: p.submitted,
+                        approved:  p.approved,
+                        disputed:  p.disputed,
+                      };
+                    })}
+                    margin={{ top: 5, right: 20, left: 0, bottom: 60 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip />
                     <Legend />
-                  </PieChart>
+                    <Bar dataKey="saved"     name="Saved"     fill={COLORS.saved}     stackId="a" />
+                    <Bar dataKey="submitted" name="Submitted" fill={COLORS.submitted} stackId="a" />
+                    <Bar dataKey="approved"  name="Approved"  fill={COLORS.approved}  stackId="a" />
+                    <Bar dataKey="disputed"  name="Disputed"  fill={COLORS.disputed}  stackId="a" radius={[3, 3, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               ) : (
                 <p className="py-20 text-center text-sm text-gray-400">No project breakdown available</p>
-              )}
-            </div>
-
-            {/* 4. Account Distribution */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Account Distribution</h2>
-              {accountPie.length > 0 ? (
-                <ResponsiveContainer width="100%" height={320}>
-                  <PieChart>
-                    <Pie data={accountPie} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={120} innerRadius={60} paddingAngle={2} label={(props: any) => `${props.name ?? ''} ${((props.percent ?? 0) * 100).toFixed(0)}%`}>
-                      {accountPie.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v) => (v != null ? Number(v).toLocaleString() : '0')} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="py-20 text-center text-sm text-gray-400">No data for this period</p>
               )}
             </div>
           </div>
