@@ -180,32 +180,32 @@ export default function TimesheetReport() {
     { name: 'Disputed',  value: overall.disputed,   color: COLORS.disputed },
   ].filter(d => d.value > 0);
 
-  // Account + Project consolidated pie — built from projectBreakdown when available;
-  // falls back to account-level grouping using the ACCOUNTS config + selected projects.
-  const accountProjectPie = (() => {
+  // ─ Account Distribution pie (Boots UK Ltd. vs Time Off)
+  const accountPie = (() => {
     const pb = data?.projectBreakdown ?? [];
-    if (pb.length > 0) {
-      return pb.map((p, i) => {
-        const acc = ACCOUNTS.find(a => a.projects.some(pr => pr.id === p.projectId || pr.id === p.projectName));
-        const proj = acc?.projects.find(pr => pr.id === p.projectId || pr.id === p.projectName);
-        return {
-          name: acc && proj ? `${acc.name} / ${proj.label}` : (p.projectName || p.projectId),
-          value: p.total,
-          color: PIE_COLORS[i % PIE_COLORS.length],
-        };
-      }).filter(d => d.value > 0);
-    }
-    // Fallback: count employees * submitted per selected account/project label
-    // (shows the distribution by selected filter even without raw project IDs in response)
-    return ACCOUNTS.flatMap(acc =>
-      acc.projects
-        .filter(p => selectedProjects.includes(p.id))
-        .map((proj, i) => ({
-          name: `${acc.name} / ${proj.label}`,
-          value: 0,
-          color: PIE_COLORS[i % PIE_COLORS.length],
-        }))
-    ).filter(d => d.value > 0);
+    if (pb.length === 0) return [];
+    const accTotals: Record<string, { name: string; total: number; color: string }> = {};
+    pb.forEach((p, i) => {
+      const acc = ACCOUNTS.find(a => a.projects.some(pr => pr.id === p.projectId || pr.id === p.projectName));
+      const accName = acc?.name ?? (p.projectName || p.projectId);
+      if (!accTotals[accName]) accTotals[accName] = { name: accName, total: 0, color: PIE_COLORS[Object.keys(accTotals).length % PIE_COLORS.length] };
+      accTotals[accName].total += p.total;
+    });
+    return Object.values(accTotals).filter(d => d.total > 0).map(d => ({ ...d, value: d.total }));
+  })();
+
+  // ─ Project Distribution pie (per project code)
+  const projectPie = (() => {
+    const pb = data?.projectBreakdown ?? [];
+    return pb.map((p, i) => {
+      const acc = ACCOUNTS.find(a => a.projects.some(pr => pr.id === p.projectId || pr.id === p.projectName));
+      const proj = acc?.projects.find(pr => pr.id === p.projectId || pr.id === p.projectName);
+      return {
+        name: proj?.label ?? p.projectName ?? p.projectId,
+        value: p.total,
+        color: PIE_COLORS[i % PIE_COLORS.length],
+      };
+    }).filter(d => d.value > 0);
   })();
 
   const filteredEmployees = useMemo(() => {
@@ -386,15 +386,15 @@ export default function TimesheetReport() {
             <KpiCard label="Disputed"       value={overall.disputed}  color={COLORS.disputed} />
           </div>
 
-          {/* ── Charts row ── */}
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-            {/* Overall status pie */}
-            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Overall Status</h2>
+          {/* ── Charts — 2 × 2 grid, larger size ── */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            {/* 1. Overall Status */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Overall Status Distribution</h2>
               {pieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={320}>
                   <PieChart>
-                    <Pie data={pieData} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={2} label={(props: any) => `${props.name ?? ''} ${((props.percent ?? 0) * 100).toFixed(0)}%`}>
+                    <Pie data={pieData} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={120} innerRadius={60} paddingAngle={2} label={(props: any) => `${props.name ?? ''} ${((props.percent ?? 0) * 100).toFixed(0)}%`}>
                       {pieData.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
@@ -404,18 +404,18 @@ export default function TimesheetReport() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="py-16 text-center text-sm text-gray-400">No data for this period</p>
+                <p className="py-20 text-center text-sm text-gray-400">No data for this period</p>
               )}
             </div>
 
-            {/* Account + Project consolidated pie */}
-            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Account / Project Distribution</h2>
-              {accountProjectPie.length > 0 ? (
-                <ResponsiveContainer width="100%" height={260}>
+            {/* 2. Account Distribution */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Account Distribution</h2>
+              {accountPie.length > 0 ? (
+                <ResponsiveContainer width="100%" height={320}>
                   <PieChart>
-                    <Pie data={accountProjectPie} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={2} label={(props: any) => `${((props.percent ?? 0) * 100).toFixed(0)}%`}>
-                      {accountProjectPie.map((entry, i) => (
+                    <Pie data={accountPie} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={120} innerRadius={60} paddingAngle={2} label={(props: any) => `${props.name ?? ''} ${((props.percent ?? 0) * 100).toFixed(0)}%`}>
+                      {accountPie.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
@@ -424,15 +424,35 @@ export default function TimesheetReport() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="py-16 text-center text-sm text-gray-400">Project breakdown not available in API response</p>
+                <p className="py-20 text-center text-sm text-gray-400">No data for this period</p>
               )}
             </div>
 
-            {/* Daily submission bar */}
-            <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            {/* 3. Project Distribution */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+              <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Project Distribution</h2>
+              {projectPie.length > 0 ? (
+                <ResponsiveContainer width="100%" height={320}>
+                  <PieChart>
+                    <Pie data={projectPie} dataKey="value" nameKey="name" cx="40%" cy="50%" outerRadius={120} innerRadius={60} paddingAngle={2} label={(props: any) => `${((props.percent ?? 0) * 100).toFixed(0)}%`}>
+                      {projectPie.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => (v != null ? Number(v).toLocaleString() : '0')} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="py-20 text-center text-sm text-gray-400">No project breakdown available</p>
+              )}
+            </div>
+
+            {/* 4. Daily Submissions */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
               <h2 className="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Daily Submissions</h2>
               {data.daily.length > 0 ? (
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={data.daily} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis dataKey="date" tickFormatter={fmt} tick={{ fontSize: 11 }} />
@@ -446,7 +466,7 @@ export default function TimesheetReport() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="py-16 text-center text-sm text-gray-400">No daily data for this period</p>
+                <p className="py-20 text-center text-sm text-gray-400">No daily data for this period</p>
               )}
             </div>
           </div>
