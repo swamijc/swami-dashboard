@@ -42,7 +42,8 @@ test('admin can login and view the code quality dashboard', async ({ page }) => 
   await expect(page.getByText('Release Version Number')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Environment Test URLs' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open DEV' }).first()).toHaveAttribute('href', /localhost:5173|http/);
-  await expect(page.getByText('QA URL not configured')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open QA' }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open QA' }).first()).toHaveAttribute('href', /github\.com/);
   await expect(page.getByRole('heading', { name: 'Environment Push Details' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Approve Move to QA|Approving QA/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Approve Move to PROD|Approving PROD/ })).toBeVisible();
@@ -91,8 +92,10 @@ test('viewer can open Jira Onboarding and Quality in read-only mode', async ({ p
   await expect(releasePage.getByRole('heading', { name: 'QA' }).first()).toBeVisible();
   await expect(releasePage.getByRole('heading', { name: 'PROD' }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Environment Test URLs' })).toBeVisible();
-  await expect(page.getByText('QA URL not configured')).toBeVisible();
-  await expect(page.getByText('PROD URL not configured')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open QA' }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open QA' }).first()).toHaveAttribute('href', /github\.com/);
+  await expect(page.getByRole('link', { name: 'Open PROD' }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open PROD' }).first()).toHaveAttribute('href', /github\.com/);
   await expect(page.getByRole('heading', { name: 'Environment Push Details' })).toBeVisible();
   await expect(page.getByText('View-only access')).toBeVisible();
   await expect(page.getByRole('button', { name: /Approve Move to QA|Approving QA/ })).toHaveCount(0);
