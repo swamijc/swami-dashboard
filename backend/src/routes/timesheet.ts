@@ -318,17 +318,42 @@ router.post('/photon/prasanna/submit', requireAuth, requireAdmin, async (req: Re
 router.get('/photon/session-check', requireAuth, (_req: Request, res: Response) => {
   const cfg = getDb().prepare(`SELECT session_cookie_enc, shibboleth_cookie_enc FROM service_configs WHERE service_name='photon_swami_entry'`).get() as any;
   const cookieSet = !!(cfg?.session_cookie_enc);
-  // Check if last photon_swami_entry run failed with a session/redirect error
+
+  // Last keep-alive ping result (written by the cron every 2 h)
+  const pingRow = getDb().prepare(
+    `SELECT extra_config, last_updated_at FROM service_configs WHERE service_name='photon_session_status'`
+  ).get() as any;
+  const pingData = pingRow ? JSON.parse(pingRow.extra_config || '{}') : null;
+
+  // Also check the last job_run for a 302 error as a fallback indicator
   const lastRun = getDb().prepare(`
     SELECT status, error_message, started_at FROM job_runs
     WHERE service_name='photon_swami_entry' AND is_dry_run=0
     ORDER BY started_at DESC LIMIT 1
   `).get() as any;
-  const sessionExpired = lastRun?.status === 'failed' &&
+  const lastRunExpired = lastRun?.status === 'failed' &&
     (lastRun?.error_message || '').toLowerCase().includes('302');
+
+  // Synthesise alive status: prefer the keep-alive ping result if recent (<4 h)
+  let sessionAlive: boolean | null = null;
+  let lastCheckedAt: string | null = null;
+  if (pingData?.alive !== undefined && pingRow?.last_updated_at) {
+    const pingAge = Date.now() - new Date(pingRow.last_updated_at + 'Z').getTime();
+    if (pingAge < 4 * 60 * 60 * 1000) {           // ping result is < 4 h old
+      sessionAlive = pingData.alive;
+      lastCheckedAt = pingData.checked_at;
+    }
+  }
+  // Fall back to last-run 302 detection
+  if (sessionAlive === null) {
+    sessionAlive = cookieSet && !lastRunExpired;
+  }
+
   res.json({
     cookie_set: cookieSet,
-    session_expired: sessionExpired,
+    session_alive: sessionAlive,
+    session_expired: !sessionAlive,
+    last_ping_at: lastCheckedAt,
     last_run_status: lastRun?.status || null,
     last_run_at: lastRun?.started_at || null,
   });

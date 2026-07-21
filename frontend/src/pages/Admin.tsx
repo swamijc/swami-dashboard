@@ -11,13 +11,25 @@ export default function Admin() {
   const [userError, setUserError] = useState('');
   const [userMessage, setUserMessage] = useState('');
   const [syncMsg, setSyncMsg] = useState('');
+  const [sessionStatus, setSessionStatus] = useState<any>(null);
+  const [sessionChecking, setSessionChecking] = useState(false);
 
   const loadUsers = () => api.get('/admin/users').then(r => setUsers(r.data)).catch(() => {});
+
+  const checkPhotonSession = async () => {
+    setSessionChecking(true);
+    try {
+      const r = await api.get('/timesheet/photon/session-check');
+      setSessionStatus(r.data);
+    } catch { /* ignore */ }
+    finally { setSessionChecking(false); }
+  };
 
   useEffect(() => {
     api.get('/admin/configs').then(r => setConfigs(r.data)).catch(() => {});
     api.get('/admin/schedules').then(r => setSchedules(r.data)).catch(() => {});
     loadUsers();
+    checkPhotonSession();
   }, []);
 
   const [sessionForm, setSessionForm] = useState<Record<string, string>>({});
@@ -80,6 +92,50 @@ export default function Admin() {
               <h2 className="font-semibold text-gray-800">Photon Sessions</h2>
               <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">Auto-managed via Chrome Extension</span>
             </div>
+
+            {/* ── Session liveness banner ── */}
+            {sessionStatus && (
+              <div className={`rounded-lg px-4 py-3 text-sm mb-4 ${
+                !sessionStatus.cookie_set
+                  ? 'bg-gray-50 border border-gray-200 text-gray-600'
+                  : sessionStatus.session_alive
+                    ? 'bg-green-50 border border-green-200 text-green-800'
+                    : 'bg-amber-50 border border-amber-200 text-amber-800'
+              }`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    {!sessionStatus.cookie_set ? (
+                      <p>No Photon session stored yet. Install the browser extension or paste cookies manually below.</p>
+                    ) : sessionStatus.session_alive ? (
+                      <p>
+                        <strong>● Session alive</strong> — Shibboleth SSO is active.
+                        {sessionStatus.last_ping_at && (
+                          <span className="text-xs font-normal ml-1 opacity-75">
+                            (last verified {new Date(sessionStatus.last_ping_at).toLocaleTimeString()})
+                          </span>
+                        )}
+                        <span className="block text-xs mt-0.5 opacity-75">
+                          Keep-alive pings run every 2 h (9 AM–5 PM IST). The 1:45 PM cron will succeed today.
+                        </span>
+                      </p>
+                    ) : (
+                      <p>
+                        <strong>⚠ Session expired</strong> — the Shibboleth SSO cookie has expired.
+                        <span className="block text-xs mt-0.5">
+                          Open <strong>timetracker.photon.com</strong> in Chrome (the browser extension will auto-refresh), or paste fresh cookies below.
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={checkPhotonSession} disabled={sessionChecking}
+                    className="shrink-0 text-xs px-3 py-1.5 rounded-lg border font-medium transition
+                      bg-white hover:bg-gray-50 border-gray-300 text-gray-700 disabled:opacity-50">
+                    {sessionChecking ? 'Checking…' : 'Re-check'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800 mb-4">
               Sessions are captured automatically when you log into Photon in Chrome.
               Install the extension from <code className="text-xs">browser-extension/</code>, then visiting
@@ -101,9 +157,15 @@ export default function Admin() {
                         <div className="text-xs text-gray-500 mt-1">Covers: Swami Entry · Prasanna Entry · Timesheet Approval</div>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                        !active ? 'bg-gray-100 text-gray-500'
+                        : sessionStatus?.session_alive ? 'bg-green-100 text-green-700'
+                        : sessionStatus?.session_expired ? 'bg-amber-100 text-amber-700'
+                        : 'bg-green-100 text-green-700'
                       }`}>
-                        {active ? '● Active' : '○ Not configured'}
+                        {!active ? '○ Not configured'
+                          : sessionStatus?.session_alive ? '● Session alive'
+                          : sessionStatus?.session_expired ? '⚠ Session expired'
+                          : '● Active'}
                       </span>
                     </div>
                     {svc?.last_updated_at && (

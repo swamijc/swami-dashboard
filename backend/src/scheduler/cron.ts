@@ -6,6 +6,60 @@ import { decrypt } from '../crypto/encrypt';
 const PHOTON_URL = process.env.PHOTON_SERVICE_URL || 'http://localhost:8001';
 const BOOTS_URL  = process.env.BOOTS_KI_SERVICE_URL || 'http://localhost:8002';
 
+// ── Session keep-alive: ping Photon to reset the Shibboleth idle timer ──────
+// Returns true if the session is still alive (HTTP 200), false if expired (302).
+// A GET to the timetracker home page with a valid session returns 200.
+// With an expired session Shibboleth redirects to the SSO login page (302).
+export async function pingPhotonSession(): Promise<boolean> {
+  const cfg = getDb().prepare(
+    `SELECT session_cookie_enc, shibboleth_cookie_enc FROM service_configs WHERE service_name='photon_swami_entry'`
+  ).get() as any;
+  if (!cfg?.session_cookie_enc) return false;
+
+  const cookie = [
+    cfg.session_cookie_enc     ? decrypt(cfg.session_cookie_enc)    : '',
+    cfg.shibboleth_cookie_enc  ? decrypt(cfg.shibboleth_cookie_enc) : '',
+  ].filter(Boolean).join('; ');
+
+  if (!cookie) return false;
+
+  try {
+    const resp = await axios.get('https://timetracker.photon.com/timetracker/', {
+      headers: {
+        Cookie: cookie,
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
+      maxRedirects: 0,                       // never follow — 302 = expired
+      validateStatus: () => true,            // don't throw on any status
+      timeout: 12000,
+    });
+    return resp.status === 200;
+  } catch {
+    return false;
+  }
+}
+
+// Write session liveness into DB so the UI and the submission cron can read it.
+function storeSessionStatus(alive: boolean): void {
+  getDb().prepare(`
+    INSERT INTO service_configs (service_name, extra_config, last_updated_at)
+    VALUES ('photon_session_status', ?, datetime('now'))
+    ON CONFLICT(service_name) DO UPDATE
+      SET extra_config=excluded.extra_config,
+          last_updated_at=excluded.last_updated_at
+  `).run(JSON.stringify({ alive, checked_at: new Date().toISOString() }));
+}
+
+async function runPhotonKeepAlive(): Promise<void> {
+  const alive = await pingPhotonSession();
+  storeSessionStatus(alive);
+  if (alive) {
+    console.log('[CRON] photon_keepalive: session alive ✓ (idle timer reset)');
+  } else {
+    console.warn('[CRON] photon_keepalive: session EXPIRED — open Photon Timetracker, copy cookies, paste in Admin panel');
+  }
+}
+
 function logRun(serviceName: string, scheduleName: string): number {
   const result = getDb().prepare(`
     INSERT INTO job_runs (service_name, schedule_name, triggered_by, status)
@@ -67,6 +121,18 @@ async function runPhotonSwamiEntry(): Promise<void> {
     console.log('[CRON] photon_swami_entry: already submitted today — skipping duplicate');
     return;
   }
+
+  // Session pre-check: detect expired session early and give a clear error.
+  const sessionAlive = await pingPhotonSession();
+  storeSessionStatus(sessionAlive);
+  if (!sessionAlive) {
+    const runId = logRun('photon_swami_entry', 'Daily 1:45 PM IST');
+    finishRun(runId, 'failed', 302, undefined,
+      'Photon session expired — open timetracker.photon.com, copy fresh cookies, paste in Admin → Photon Access');
+    console.error('[CRON] photon_swami_entry: session EXPIRED — skipping submission, please refresh cookies');
+    return;
+  }
+
   const runId = logRun('photon_swami_entry', 'Daily 1:45 PM IST');
   try {
     const resp = await axios.post(`${PHOTON_URL}/swami/submit`, {
@@ -122,6 +188,20 @@ async function runPhotonPrasannaEntry(): Promise<void> {
     console.log('[CRON] photon_prasanna_entry: already submitted today — skipping duplicate');
     return;
   }
+
+  // Re-use the swami session check result already stored a few ms ago (same session).
+  const sessionStatus = getDb().prepare(
+    `SELECT extra_config FROM service_configs WHERE service_name='photon_session_status'`
+  ).get() as any;
+  const sessionAlive = JSON.parse(sessionStatus?.extra_config || '{"alive":true}').alive;
+  if (!sessionAlive) {
+    const runId = logRun('photon_prasanna_entry', 'Daily 1:45 PM IST');
+    finishRun(runId, 'failed', 302, undefined,
+      'Photon session expired — open timetracker.photon.com, copy fresh cookies, paste in Admin → Photon Access');
+    console.error('[CRON] photon_prasanna_entry: session EXPIRED — skipping submission');
+    return;
+  }
+
   const runId = logRun('photon_prasanna_entry', 'Daily 1:45 PM IST');
   try {
     const resp = await axios.post(`${PHOTON_URL}/prasanna/submit`, {
@@ -218,6 +298,15 @@ async function scheduleMissedCatchup(): Promise<void> {
 }
 
 export function initScheduler(): void {
+  // ── Photon Session Keep-alive: Mon-Fri every 2 h (9 AM→6 PM IST) ──────────
+  // Resets the Shibboleth idle timer so the 1:45 PM submission succeeds.
+  // Runs at 3:30, 5:30, 7:30, 9:30 UTC (9 AM, 11 AM, 1 PM, 3 PM, 5:30 PM IST)
+  // Also pings at 6:30 UTC (12 PM IST) — 75 min before the submission cron.
+  cron.schedule('30 3,5,6,7,9 * * 1-5', () => {
+    console.log('[CRON] Triggering photon_keepalive...');
+    runPhotonKeepAlive();
+  }, { timezone: 'UTC' });
+
   // ── Photon Swami Entry: Mon–Fri 1:45 PM IST (08:15 UTC) ────────
   cron.schedule('15 8 * * 1-5', () => {
     console.log('[CRON] Triggering photon_swami_entry...');
@@ -263,6 +352,7 @@ export function initScheduler(): void {
   }, { timezone: 'UTC' });
 
   console.log('[CRON] All schedules registered (UTC timezone)');
+  console.log('[CRON]   Session keep-alive: Mon-Fri 03:30,05:30,06:30,07:30,09:30 UTC (9AM-5PM IST every 2h)');
   console.log('[CRON]   Swami entry:    Mon-Fri 08:15 UTC (1:45 PM IST)');
   console.log('[CRON]   Swami PMO:      Mon-Fri 08:20 UTC (1:50 PM IST) — conditional on today submit success');
   console.log('[CRON]   Prasanna entry: Mon-Fri 08:15 UTC (1:45 PM IST)');
