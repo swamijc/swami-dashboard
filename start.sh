@@ -107,7 +107,7 @@ if command -v cloudflared >/dev/null 2>&1; then
   TUNNEL_PID=$!
   # Wait up to 15s for tunnel URL to appear in log
   for i in $(seq 1 15); do
-    TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1 || true)
+    TUNNEL_URL=$(strings "$TUNNEL_LOG" 2>/dev/null | grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' | tail -1 || true)
     [ -n "$TUNNEL_URL" ] && break
     sleep 1
   done
