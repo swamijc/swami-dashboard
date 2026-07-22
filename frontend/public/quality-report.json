@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T08:39:37.681Z",
+  "generatedAt": "2026-07-22T11:17:36.894Z",
   "overallStatus": "passed",
   "score": 100,
   "coverage": {
@@ -15,14 +15,14 @@
         {
           "name": "Frontend production build",
           "status": "passed",
-          "durationMs": 3810,
+          "durationMs": 3666,
           "exitCode": 0,
-          "output": "> swami-dashboard-frontend@1.0.0 build\n> tsc && vite build\n\nvite v8.1.4 building client environment for production...\n\u001b[2K\rtransforming...✓ 956 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                    0.48 kB │ gzip:   0.31 kB\ndist/assets/photon-CtaeFhXU.png    1.12 kB\ndist/assets/index-UxOGOBZy.css    30.38 kB │ gzip:   6.35 kB\ndist/assets/index-CBl8yROD.js    769.74 kB │ gzip: 218.01 kB\n\n✓ built in 455ms\n[plugin builtin:vite-reporter] \n(!) Some chunks are larger than 500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
+          "output": "> swami-dashboard-frontend@1.0.0 build\n> tsc && vite build\n\nvite v8.1.4 building client environment for production...\n\u001b[2K\rtransforming...✓ 956 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                    0.48 kB │ gzip:   0.31 kB\ndist/assets/photon-CtaeFhXU.png    1.12 kB\ndist/assets/index-Fm0WAx64.css    31.22 kB │ gzip:   6.45 kB\ndist/assets/index-ChFWvy2F.js    772.73 kB │ gzip: 218.93 kB\n\n✓ built in 477ms\n[plugin builtin:vite-reporter] \n(!) Some chunks are larger than 500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
         },
         {
           "name": "Backend TypeScript build",
           "status": "passed",
-          "durationMs": 1887,
+          "durationMs": 1954,
           "exitCode": 0,
           "output": "> swami-dashboard-backend@1.0.0 build\n> tsc"
         }
@@ -34,9 +34,9 @@
         {
           "name": "Backend unit tests with coverage",
           "status": "passed",
-          "durationMs": 5231,
+          "durationMs": 5365,
           "exitCode": 0,
-          "output": "> swami-dashboard-backend@1.0.0 test:coverage\n> vitest run --coverage\n\n\n RUN  v4.1.10 /Users/swaminathan.kannaiyan/Documents/Swami Dashboard/backend\n      Coverage enabled with v8\n\n\n Test Files  3 passed (3)\n      Tests  15 passed (15)\n   Start at  14:09:15\n   Duration  3.63s (transform 87ms, setup 0ms, import 105ms, tests 2.75s, environment 0ms)\n\n % Coverage report from v8\n-------------------|---------|----------|---------|---------|-------------------\nFile               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s \n-------------------|---------|----------|---------|---------|-------------------\nAll files          |   22.25 |    15.74 |   18.39 |   23.68 |                   \n crypto            |   95.23 |    83.33 |     100 |     100 |                   \n  encrypt.ts       |   95.23 |    83.33 |     100 |     100 | 6,24              \n db                |   78.68 |    64.28 |   66.66 |   82.45 |                   \n  database.ts      |   97.14 |    68.18 |     100 |     100 | 11-295,325        \n  sessionStore.ts  |   53.84 |       50 |   42.85 |   58.33 | 26-27,30,42-54    \n middleware        |     100 |       90 |     100 |     100 |                   \n  audit.ts         |     100 |    83.33 |     100 |     100 | 11                \n routes            |   19.17 |    12.92 |   13.38 |   20.75 |                   \n  admin.ts         |   27.77 |    13.11 |   11.76 |   33.33 | ...33-140,145-146 \n  auth.ts          |   74.07 |       75 |      50 |   74.07 | 11-12,31-33,40-41 \n  jira.ts          |   19.33 |    13.14 |    9.09 |   21.48 | ...33-237,245-345 \n  release.ts       |   86.27 |     80.7 |     100 |   84.78 | ...30-131,134-135 \n  timesheet.ts     |    8.58 |     2.43 |       0 |     8.8 | ...73-477,481-487 \n  ...heetReport.ts |    4.73 |        0 |       0 |    5.92 | ...07-121,132-324 \n  tracking.ts      |    9.52 |     5.66 |       0 |   10.75 | ...82-192,198-200 \n scheduler         |    1.21 |     5.19 |       0 |    1.26 |                   \n  cron.ts          |    1.21 |     5.19 |       0 |    1.26 | 14-366            \n-------------------|---------|----------|---------|---------|-------------------\n\n=============================== Coverage summary ===============================\nStatements   : 22.25% ( 229/1029 )\nBranches     : 15.74% ( 137/870 )\nFunctions    : 18.39% ( 32/174 )\nLines        : 23.68% ( 221/933 )\n================================================================================"
+          "output": "> swami-dashboard-backend@1.0.0 test:coverage\n> vitest run --coverage\n\n\n RUN  v4.1.10 /Users/swaminathan.kannaiyan/Documents/Swami Dashboard/backend\n      Coverage enabled with v8\n\n\n Test Files  3 passed (3)\n      Tests  15 passed (15)\n   Start at  16:47:07\n   Duration  3.51s (transform 74ms, setup 0ms, import 108ms, tests 2.64s, environment 0ms)\n\n % Coverage report from v8\n-------------------|---------|----------|---------|---------|-------------------\nFile               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s \n-------------------|---------|----------|---------|---------|-------------------\nAll files          |   22.25 |    15.74 |   18.39 |   23.68 |                   \n crypto            |   95.23 |    83.33 |     100 |     100 |                   \n  encrypt.ts       |   95.23 |    83.33 |     100 |     100 | 6,24              \n db                |   78.68 |    64.28 |   66.66 |   82.45 |                   \n  database.ts      |   97.14 |    68.18 |     100 |     100 | 11-295,325        \n  sessionStore.ts  |   53.84 |       50 |   42.85 |   58.33 | 26-27,30,42-54    \n middleware        |     100 |       90 |     100 |     100 |                   \n  audit.ts         |     100 |    83.33 |     100 |     100 | 11                \n routes            |   19.17 |    12.92 |   13.38 |   20.75 |                   \n  admin.ts         |   27.77 |    13.11 |   11.76 |   33.33 | ...33-140,145-146 \n  auth.ts          |   74.07 |       75 |      50 |   74.07 | 11-12,31-33,40-41 \n  jira.ts          |   19.33 |    13.14 |    9.09 |   21.48 | ...33-237,245-345 \n  release.ts       |   86.27 |     80.7 |     100 |   84.78 | ...30-131,134-135 \n  timesheet.ts     |    8.58 |     2.43 |       0 |     8.8 | ...73-477,481-487 \n  ...heetReport.ts |    4.73 |        0 |       0 |    5.92 | ...07-121,132-324 \n  tracking.ts      |    9.52 |     5.66 |       0 |   10.75 | ...82-192,198-200 \n scheduler         |    1.21 |     5.19 |       0 |    1.26 |                   \n  cron.ts          |    1.21 |     5.19 |       0 |    1.26 | 14-366            \n-------------------|---------|----------|---------|---------|-------------------\n\n=============================== Coverage summary ===============================\nStatements   : 22.25% ( 229/1029 )\nBranches     : 15.74% ( 137/870 )\nFunctions    : 18.39% ( 32/174 )\nLines        : 23.68% ( 221/933 )\n================================================================================"
         }
       ]
     },
@@ -46,9 +46,9 @@
         {
           "name": "Playwright E2E and accessibility tests",
           "status": "passed",
-          "durationMs": 13000,
+          "durationMs": 18650,
           "exitCode": 0,
-          "output": "> swami-dashboard-frontend@1.0.0 test:e2e\n> playwright test\n\n\nRunning 4 tests using 1 worker\n\n  ✓  1 [chromium] › tests/e2e/dashboard.spec.ts:23:1 › anonymous users are redirected to login for protected pages (1.6s)\n  ✓  2 [chromium] › tests/e2e/dashboard.spec.ts:32:1 › admin can login and view the code quality dashboard (1.2s)\n  ✓  3 [chromium] › tests/e2e/dashboard.spec.ts:52:1 › viewer can open Jira Onboarding and Quality in read-only mode (3.0s)\n  ✓  4 [chromium] › tests/e2e/dashboard.spec.ts:113:1 › login and quality pages have no critical accessibility violations (1.6s)\n\n  4 passed (11.4s)"
+          "output": "> swami-dashboard-frontend@1.0.0 test:e2e\n> playwright test\n\n\nRunning 4 tests using 1 worker\n\n  ✓  1 [chromium] › tests/e2e/dashboard.spec.ts:23:1 › anonymous users are redirected to login for protected pages (3.1s)\n  ✓  2 [chromium] › tests/e2e/dashboard.spec.ts:32:1 › admin can login and view the code quality dashboard (2.0s)\n  ✓  3 [chromium] › tests/e2e/dashboard.spec.ts:52:1 › viewer can open Jira Onboarding and Quality in read-only mode (3.9s)\n  ✓  4 [chromium] › tests/e2e/dashboard.spec.ts:113:1 › login and quality pages have no critical accessibility violations (4.2s)\n\n  4 passed (17.1s)"
         }
       ]
     },
@@ -59,19 +59,19 @@
           "name": "Frontend /timesheet route",
           "status": "passed",
           "httpStatus": 200,
-          "durationMs": 26
+          "durationMs": 37
         },
         {
           "name": "Frontend /release route",
           "status": "passed",
           "httpStatus": 200,
-          "durationMs": 2
+          "durationMs": 3
         },
         {
           "name": "Backend health route",
           "status": "passed",
           "httpStatus": 200,
-          "durationMs": 1
+          "durationMs": 2
         }
       ]
     },
@@ -105,8 +105,8 @@
           "concurrency": 10,
           "passed": 100,
           "failed": 0,
-          "p95Ms": 4,
-          "durationMs": 22
+          "p95Ms": 6,
+          "durationMs": 25
         }
       ]
     },
@@ -136,7 +136,7 @@
           "name": "No hardcoded secrets in source files",
           "status": "passed",
           "findings": 0,
-          "scannedFiles": 81
+          "scannedFiles": 82
         }
       ]
     },

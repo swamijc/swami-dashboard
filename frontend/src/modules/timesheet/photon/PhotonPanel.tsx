@@ -115,6 +115,79 @@ function WeekGrid({ days }: { days?: any[] }) {
   );
 }
 
+// ── Session Refresh Panel ────────────────────────────────────────────────────
+// Shown whenever the Photon session is expired or a run returns a 302 error.
+function SessionRefreshPanel({
+  onRefreshed,
+}: {
+  onRefreshed: () => void;
+}) {
+  const [cookiePaste, setCookiePaste] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const save = async () => {
+    const clean = cookiePaste.replace(/^Cookie:\s*/i, '').trim();
+    if (!clean.includes('myCookie=') || !clean.includes('_shibsession_')) {
+      setMsg('❌ Missing myCookie or _shibsession_ — paste the full Cookie header.');
+      return;
+    }
+    setSaving(true);
+    setMsg('');
+    try {
+      await api.post('/timesheet/photon/refresh-session', { cookie_header: clean });
+      setMsg('✅ Session saved! Retrying…');
+      setCookiePaste('');
+      setTimeout(() => { onRefreshed(); setMsg(''); }, 800);
+    } catch (e: any) {
+      setMsg(`❌ ${e?.response?.data?.error || e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4">
+      <div className="flex items-start gap-3 mb-3">
+        <span className="text-xl">⚠</span>
+        <div>
+          <p className="font-semibold text-amber-900 text-sm">Photon session expired</p>
+          <p className="text-xs text-amber-800 mt-0.5">
+            The Shibboleth SSO cookie has expired. You need fresh cookies from your browser.
+          </p>
+          <ol className="text-xs text-amber-800 mt-2 space-y-0.5 list-decimal list-inside">
+            <li>Open <a href="https://timetracker.photon.com/timetracker/" target="_blank" rel="noreferrer" className="underline font-medium">timetracker.photon.com</a> in Chrome and log in</li>
+            <li>Press F12 → Network tab → click any request → Headers → find <code className="bg-amber-100 px-1 rounded">Cookie:</code></li>
+            <li>Right-click the value → <strong>Copy value</strong>, then paste below</li>
+          </ol>
+        </div>
+      </div>
+      <textarea
+        rows={3}
+        placeholder="Paste the full Cookie: header value here…"
+        value={cookiePaste}
+        onChange={e => setCookiePaste(e.target.value)}
+        className="w-full border border-amber-300 rounded-lg px-3 py-2 text-xs font-mono bg-white focus:ring-2 focus:ring-amber-400 outline-none resize-none"
+      />
+      {msg && (
+        <p className={`text-xs mt-1.5 font-medium ${msg.startsWith('✅') ? 'text-green-700' : 'text-red-700'}`}>{msg}</p>
+      )}
+      <div className="flex items-center gap-3 mt-2">
+        <button
+          onClick={save}
+          disabled={saving || !cookiePaste.trim()}
+          className="px-4 py-1.5 bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg"
+        >
+          {saving ? 'Saving…' : 'Save & Retry'}
+        </button>
+        <span className="text-xs text-amber-700">
+          Or run: <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono">pbpaste | python3 scripts/refresh-photon-session.py</code>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function PhotonPanel() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -124,6 +197,15 @@ export default function PhotonPanel() {
   const [approvalSummary, setApprovalSummary] = useState<any>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState('');
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  const checkSession = async () => {
+    try {
+      const r = await api.get('/timesheet/photon/session-check');
+      setSessionExpired(r.data.session_expired === true);
+    } catch { /* silent */ }
+  };
+
   const loadStatus = async () => {
     setStatusLoading(true);
     setStatusError('');
@@ -141,7 +223,7 @@ export default function PhotonPanel() {
     }
   };
 
-  useEffect(() => { loadStatus(); }, [weekStart]);
+  useEffect(() => { loadStatus(); checkSession(); }, [weekStart]);
 
   const swamiEntry = statusSummary?.entries?.find((e: any) => e.key === 'swami');
   const prasannaEntry = statusSummary?.entries?.find((e: any) => e.key === 'prasanna');
@@ -165,7 +247,14 @@ export default function PhotonPanel() {
         setPmoStatus({ status: 'info', message: d.message || JSON.stringify(d).slice(0, 100), count: 0 });
       }
     } catch (err: any) {
-      setPmoStatus({ status: 'error', message: err?.response?.data?.error || err.message, count: 0 });
+      const errMsg: string = err?.response?.data?.error || err.message || '';
+      // 302 redirect = session expired
+      if (errMsg.includes('302') || errMsg.toLowerCase().includes('redirect') || errMsg.toLowerCase().includes('session')) {
+        setSessionExpired(true);
+        setPmoStatus({ status: 'error', message: 'Session expired — paste fresh cookies in the banner above and retry.', count: 0 });
+      } else {
+        setPmoStatus({ status: 'error', message: errMsg, count: 0 });
+      }
     } finally {
       setPmoLoading(false);
     }
@@ -181,6 +270,18 @@ export default function PhotonPanel() {
 
   return (
     <div className="w-full">
+
+      {/* ── Session Expired Banner — shown when SSO cookie has expired ── */}
+      {isAdmin && sessionExpired && (
+        <SessionRefreshPanel
+          onRefreshed={() => {
+            setSessionExpired(false);
+            setPmoStatus(null);
+            loadStatus();
+          }}
+        />
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
 
         {/* Swami's Entry */}
