@@ -8,10 +8,13 @@ let db: DatabaseSync;
 
 export function getDb(): DatabaseSync {
   if (!db) {
-    const dbPath = process.env.DB_PATH || './data/dashboard.db';
+    // Anchor to __dirname so the path is always backend/data/dashboard.db
+    // regardless of which directory the process was started from.
+    const dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/dashboard.db');
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     db = new DatabaseSync(dbPath);
+    console.log(`[DB] Using database: ${dbPath}`);
     db.exec('PRAGMA journal_mode = WAL');
     db.exec('PRAGMA foreign_keys = ON');
     initSchema(db);
