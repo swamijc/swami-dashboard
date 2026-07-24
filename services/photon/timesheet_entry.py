@@ -203,13 +203,22 @@ async def get_pmo_review_items(
 ) -> list[dict]:
     """
     Search for timesheets eligible for PMO review via getRequestReviewSearch.
+
+    Default date range: Monday of the current week → last day of the current month.
+    This matches the exact payload format confirmed from live browser requests.
     Returns the raw requestReviewSearchData list.
     """
     today = date.today()
     if to_date is None:
-        to_date = today.strftime("%Y-%m-%d")
+        # End of the current month
+        import calendar
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        to_date = today.replace(day=last_day).strftime("%Y-%m-%d")
     if from_date is None:
-        from_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+        # Monday of the current week (weekday 0 = Mon)
+        days_since_monday = today.weekday()  # 0=Mon … 6=Sun
+        week_monday = today - timedelta(days=days_since_monday)
+        from_date = week_monday.strftime("%Y-%m-%d")
 
     url = f"{BASE_URL}/timetracker/getRequestReviewSearch?time-stamp={get_timestamp_ms()}"
     # Use the exact payload format confirmed from live browser request

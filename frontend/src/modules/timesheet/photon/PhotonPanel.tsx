@@ -228,8 +228,18 @@ export default function PhotonPanel() {
   const swamiEntry = statusSummary?.entries?.find((e: any) => e.key === 'swami');
   const prasannaEntry = statusSummary?.entries?.find((e: any) => e.key === 'prasanna');
 
-  const [pmoStatus, setPmoStatus] = React.useState<{ status: string; message: string; count: number } | null>(null);
+  const [pmoStatus, setPmoStatus] = React.useState<{ status: string; message: string; count: number; dateRange?: string } | null>(null);
   const [pmoLoading, setPmoLoading] = React.useState(false);
+
+  // Calculate current week's date range for display (Mon → month-end)
+  const pmoDateRange = React.useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const daysFromMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const mon = new Date(now); mon.setDate(now.getDate() - daysFromMon);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return `${localIsoDate(mon)} → ${localIsoDate(lastDay)}`;
+  }, [today]);
 
   const submitToPmo = async (dryRun = false) => {
     setPmoLoading(true);
@@ -237,18 +247,18 @@ export default function PhotonPanel() {
     try {
       const resp = await api.post('/timesheet/photon/swami/pmo-submit', { dry_run: dryRun });
       const d = resp.data;
+      const range = d.from_date && d.to_date ? ` (${d.from_date} → ${d.to_date})` : '';
       if (d.status === 'no_pending') {
-        setPmoStatus({ status: 'none', message: 'No pending PMO review requests found.', count: 0 });
+        setPmoStatus({ status: 'none', message: `No pending PMO review requests found for this week${range}.`, count: 0 });
       } else if (d.status === 'success') {
-        setPmoStatus({ status: 'success', message: `Request submitted to PMO (${d.submitted_count} item${d.submitted_count !== 1 ? 's' : ''})`, count: d.submitted_count });
+        setPmoStatus({ status: 'success', message: `✅ ${d.submitted_count} timesheet${d.submitted_count !== 1 ? 's' : ''} submitted to PMO${range}`, count: d.submitted_count });
       } else if (d.dry_run) {
-        setPmoStatus({ status: 'dry', message: `Dry run — ${d.pending_count} item(s) would be submitted`, count: d.pending_count || 0 });
+        setPmoStatus({ status: 'dry', message: `Dry run — ${d.pending_count} item(s) would be submitted${range}`, count: d.pending_count || 0 });
       } else {
         setPmoStatus({ status: 'info', message: d.message || JSON.stringify(d).slice(0, 100), count: 0 });
       }
     } catch (err: any) {
       const errMsg: string = err?.response?.data?.error || err.message || '';
-      // 302 redirect = session expired
       if (errMsg.includes('302') || errMsg.toLowerCase().includes('redirect') || errMsg.toLowerCase().includes('session')) {
         setSessionExpired(true);
         setPmoStatus({ status: 'error', message: 'Session expired — paste fresh cookies in the banner above and retry.', count: 0 });
@@ -335,8 +345,11 @@ export default function PhotonPanel() {
           <div className="mt-4 border-t border-gray-100 pt-4">
             <div className="flex items-center gap-3 mb-2">
               <span className="text-xs font-semibold text-gray-700">📬 Submit to PMO</span>
-              <span className="text-xs text-gray-400">Sends timesheet review request → you receive "Defaulter Timesheet Approval Request Notification" email</span>
+              <span className="text-xs text-gray-500 font-mono bg-gray-50 border border-gray-200 px-2 py-0.5 rounded">{pmoDateRange}</span>
             </div>
+            <p className="text-xs text-gray-400 mb-3">
+              Covers Mon → month-end · auto-calculated each week · sends "Defaulter Timesheet Approval Request Notification" email
+            </p>
             {pmoStatus && (
               <div className={`mb-3 text-xs rounded-lg px-3 py-2 flex items-center gap-2 ${
                 pmoStatus.status === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
@@ -344,23 +357,16 @@ export default function PhotonPanel() {
                 pmoStatus.status === 'none'    ? 'bg-gray-50 border border-gray-200 text-gray-600' :
                 'bg-blue-50 border border-blue-200 text-blue-800'
               }`}>
-                <span>
-                  {pmoStatus.status === 'success' ? '✅' :
-                   pmoStatus.status === 'error'   ? '❌' :
-                   pmoStatus.status === 'none'    ? '—'  : 'ℹ'}
-                </span>
                 <span>{pmoStatus.message}</span>
               </div>
             )}
-            <div className="flex gap-2">
-              <button
-                disabled={pmoLoading}
-                onClick={() => submitToPmo(false)}
-                className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white text-xs font-medium rounded-lg"
-              >
-                {pmoLoading ? 'Submitting…' : 'Submit to PMO'}
-              </button>
-            </div>
+            <button
+              disabled={pmoLoading}
+              onClick={() => submitToPmo(false)}
+              className="px-4 py-1.5 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg"
+            >
+              {pmoLoading ? '⏳ Submitting…' : '📬 Submit to PMO'}
+            </button>
           </div>
         )}
       </Card>

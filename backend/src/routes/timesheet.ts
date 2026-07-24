@@ -247,17 +247,36 @@ router.post('/photon/swami/submit', requireAuth, requireAdmin, async (req: Reque
   }
 });
 // ── Photon: Swami PMO Submit ────────────────────────────────────
-// Step 1: calls getRequestReviewSearch to find pending items.
-// Step 2: auto-confirms and calls updateRequestForReview.
-// Triggers "Defaulter Timesheet Approval Request Notification" email.
+// Calls getRequestReviewSearch to submit pending PMO review requests.
+// Date range defaults to Monday of current week → end of current month,
+// matching the exact payload format from live browser requests.
 router.post('/photon/swami/pmo-submit', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   const isDry = req.body.dry_run === true;
+
+  // Auto-calculate this week's date range if not provided by the caller
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun … 6=Sat
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - daysFromMonday);
+  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+  const fromDate = req.body.from_date || localIsoDate(monday);
+  const toDate   = req.body.to_date   || localIsoDate(lastDayOfMonth);
+
   try {
     const cookies = getSessionCookies('photon_swami_entry');
+    if (!cookies.photon) {
+      return res.status(400).json({ error: 'Photon session not configured — paste cookies in Admin → Session Tokens' });
+    }
     const resp = await axios.post(`${PHOTON_URL}/swami/pmo-submit`, {
-      ...req.body, dry_run: isDry, session_cookie: cookies.photon
+      ...req.body,
+      dry_run: isDry,
+      session_cookie: cookies.photon,
+      from_date: fromDate,
+      to_date: toDate,
     }, { timeout: 30000 });
-    res.json(resp.data);
+    res.json({ ...resp.data, from_date: fromDate, to_date: toDate });
   } catch (err: any) {
     const msg = err?.response?.data?.detail || err.message;
     res.status(err?.response?.status || 500).json({ error: msg });
